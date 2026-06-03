@@ -1,0 +1,63 @@
+{
+  "plan_id": "plan_SCSP_v1_astra_sim_integration_20250603",
+  "created_at": "2026-06-03T02:36:00",
+  "updated_at": "2026-06-03T05:55:00",
+  "current_round": 4,
+  "total_rounds": 4,
+  "status": "completed",
+  "changes": [
+    {
+      "round": 1,
+      "timestamp": "2026-06-03T02:36:00",
+      "agent": "Planner (Hermes)",
+      "description": "Plan 制定：完成 plan.md 编写，确认技术摸底结论与 AC 条款",
+      "files_changed": [".hermes/plans/plan.md"]
+    },
+    {
+      "round": 2,
+      "timestamp": "2026-06-03T03:00:00",
+      "agent": "Planner (Hermes)",
+      "description": "环境迁移 + astra-sim 构建 + AC-3/AC-4 单位适配与结构化输出修改",
+      "files_changed": [
+        "astra-sim/astra-sim/system/Sys.hh",
+        "astra-sim/astra-sim/system/Sys.cc",
+        "astra-sim/astra-sim/workload/Workload.cc",
+        "astra-sim/astra-sim/network_frontend/analytical/congestion_aware/main.cc"
+      ]
+    },
+    {
+      "round": 3,
+      "timestamp": "2026-06-03T04:15:00",
+      "agent": "Planner (Hermes)",
+      "description": "AC-1/AC-5/AC-6/AC-7/AC-9 实现：桥接层、engine、web_api、前端、文档、清理",
+      "files_changed": [
+        "scsp/astra_sim_bridge.py",
+        "scsp/engine.py",
+        "scsp/web_api.py",
+        "scsp/models.py",
+        "scsp/__init__.py",
+        "web/index.html",
+        "configs/model_registry.json",
+        "README-astra-integration.md",
+        ".gitignore"
+      ],
+      "verification": {
+        "dense_model_e2e": "PASSED (11.51s) with qwen3-4b, total_latency_s=5.65",
+        "vlm_model_bug": "IDENTIFIED - npus_count mismatch for VLM models"
+      }
+    },
+    {
+      "round": 4,
+      "timestamp": "2026-06-03T05:55:00",
+      "agent": "Codex (Builder)",
+      "description": "修复 _write_astra_configs npus_count 计算逻辑（扫描实际 .et 文件数）；更新测试为 Qwen2.5-VL-3B",
+      "files_changed": [
+        "scsp/astra_sim_bridge.py",
+        "tests/test_astra_integration.py"
+      ],
+      "verification": {
+        "test_astra_integration.py": "PASSED (25.25s) with Qwen2.5-VL-3B, dp=1,tp=2,pp=1, mixed_precision=False"
+      }
+    }
+  ]
+}

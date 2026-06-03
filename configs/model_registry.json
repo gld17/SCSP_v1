@@ -1,0 +1,146 @@
+{
+  "Qwen2.5-VL-3B": {
+    "model_params": "3B",
+    "structure": {
+      "model_name": "Qwen2.5-VL-3B",
+      "model_type": "vlm",
+      "parameter_count": {
+        "active_unit": 3000000000,
+        "resident_unit": 3000000000,
+        "dense_or_moe": "dense"
+      },
+      "llm": {
+        "num_hidden_layers": 36,
+        "hidden_size": 2560,
+        "intermediate_size": 9728,
+        "num_attention_heads": 20,
+        "num_key_value_heads": 4
+      },
+      "vision": {
+        "depth": 32,
+        "hidden_size": 1280,
+        "patch_size": 14,
+        "spatial_merge_size": 2,
+        "out_hidden_size": 2560
+      }
+    },
+    "profiling": {
+      "prefill_flops_gflops_per_patch": 3623.7,
+      "decode_flops_gflops_per_token": 5.603,
+      "prefill_memory_gb_per_patch": 8.44,
+      "prefill_peak_memory_breakdown_gb": {
+        "weight_gb": 5.2,
+        "kv_cache_gb": 1.2,
+        "activation_peak_gb": 1.74,
+        "workspace_gb": 0.3
+      },
+      "decode_memory_mb_per_token": 6808,
+      "decode_memory_breakdown_gb": {
+        "weight_read_gb_per_token": 6.45,
+        "kv_cache_read_gb_per_token": 0.2,
+        "kv_cache_write_gb_per_token": 0.0001,
+        "activation_and_intermediate_gb_per_token": 0.1579
+      },
+      "inter_stage_transfer": {
+        "prefill_mb": 1.79,
+        "decode_kb": 5.72
+      }
+    }
+  },
+  "Qwen2.5-VL-7B": {
+    "model_params": "7B",
+    "structure": {
+      "model_name": "Qwen2.5-VL-7B",
+      "model_type": "vlm",
+      "parameter_count": {
+        "active_unit": 7000000000,
+        "resident_unit": 7000000000,
+        "dense_or_moe": "dense"
+      },
+      "llm": {
+        "num_hidden_layers": 28,
+        "hidden_size": 3584,
+        "intermediate_size": 18944,
+        "num_attention_heads": 28,
+        "num_key_value_heads": 4
+      },
+      "vision": {
+        "depth": 32,
+        "hidden_size": 1280,
+        "patch_size": 14,
+        "spatial_merge_size": 2,
+        "out_hidden_size": 3584
+      }
+    },
+    "profiling": {
+      "prefill_flops_gflops_per_patch": 6275,
+      "decode_flops_gflops_per_token": 13.124,
+      "prefill_memory_gb_per_patch": 16.57,
+      "prefill_peak_memory_breakdown_gb": {
+        "weight_gb": 11,
+        "kv_cache_gb": 2.2,
+        "activation_peak_gb": 2.77,
+        "workspace_gb": 0.6
+      },
+      "decode_memory_mb_per_token": 15252,
+      "decode_memory_breakdown_gb": {
+        "weight_read_gb_per_token": 14.85,
+        "kv_cache_read_gb_per_token": 0.15,
+        "kv_cache_write_gb_per_token": 0.0001,
+        "activation_and_intermediate_gb_per_token": 0.2519
+      },
+      "inter_stage_transfer": {
+        "prefill_mb": 2.5,
+        "decode_kb": 7.17
+      }
+    }
+  },
+  "Qwen2.5-VL-32B": {
+    "model_params": "32B",
+    "structure": {
+      "model_name": "Qwen2.5-VL-32B",
+      "model_type": "vlm",
+      "parameter_count": {
+        "active_unit": 32000000000,
+        "resident_unit": 32000000000,
+        "dense_or_moe": "dense"
+      },
+      "llm": {
+        "num_hidden_layers": 64,
+        "hidden_size": 5120,
+        "intermediate_size": 27648,
+        "num_attention_heads": 40,
+        "num_key_value_heads": 8
+      },
+      "vision": {
+        "depth": 32,
+        "hidden_size": 1280,
+        "patch_size": 14,
+        "spatial_merge_size": 2,
+        "out_hidden_size": 5120
+      }
+    },
+    "profiling": {
+      "prefill_flops_gflops_per_patch": 23729.2,
+      "decode_flops_gflops_per_token": 62.6511,
+      "prefill_memory_gb_per_patch": 67.77,
+      "prefill_peak_memory_breakdown_gb": {
+        "weight_gb": 64.98,
+        "kv_cache_gb": 0.09,
+        "activation_peak_gb": 1.61,
+        "workspace_gb": 1.08
+      },
+      "decode_memory_mb_per_token": 67199,
+      "decode_memory_breakdown_gb": {
+        "weight_read_gb_per_token": 65.528,
+        "kv_cache_read_gb_per_token": 0.0954,
+        "kv_cache_write_gb_per_token": 0.000262,
+        "activation_and_intermediate_gb_per_token": 0.000041
+      },
+      "inter_stage_transfer": {
+        "prefill_mb": 3.57,
+        "decode_kb": 10.24
+      }
+    }
+  }
+}

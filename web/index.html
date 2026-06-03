@@ -1,0 +1,3649 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SCSP 仿真平台</title>
+    <style>
+      :root {
+        --bg-0: #071022;
+        --bg-1: #0b1730;
+        --card: rgba(13, 27, 55, 0.92);
+        --line: rgba(127, 160, 215, 0.26);
+        --txt: #eaf2ff;
+        --txt-dim: #a8bddf;
+        --blue: #5aa9ff;
+        --cyan: #67d5ff;
+        --green: #3bd083;
+        --orange: #f5a24f;
+        --red: #ec6868;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--txt);
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: radial-gradient(1200px 600px at 15% -10%, rgba(42, 94, 194, 0.35), transparent 55%),
+                    radial-gradient(900px 500px at 95% -10%, rgba(26, 128, 170, 0.25), transparent 60%),
+                    linear-gradient(180deg, var(--bg-0), var(--bg-1) 45%, #061125);
+      }
+      .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; align-items: stretch; }
+      .sidebar {
+        background: radial-gradient(700px 320px at 10% 10%, rgba(34, 90, 177, 0.18), transparent 60%),
+                    linear-gradient(180deg, rgba(6, 16, 34, 0.99), rgba(6, 15, 31, 0.97));
+        border-right: 1px solid rgba(129, 162, 220, 0.2);
+        padding: 0;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .side-logo {
+        min-height: 92px;
+        padding: 16px 20px 14px;
+        border-bottom: 1px solid rgba(126, 163, 224, 0.18);
+      }
+      .brand { display: flex; align-items: flex-start; gap: 10px; margin: 0; }
+      .brand-logo {
+        width: 34px; height: 34px; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6bff, #6ec1ff);
+        box-shadow: 0 0 16px rgba(58, 139, 255, 0.35);
+      }
+      .brand h1 { margin: 0; font-size: 30px; line-height: 1; }
+      .brand .name-cn {
+        margin: 0;
+        font-size: clamp(21px, 2.4vw, 28px);
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        line-height: 1.15;
+      }
+      .brand .sub {
+        margin-top: 3px;
+        font-size: 11px;
+        color: rgba(244, 247, 251, 0.72);
+        line-height: 1.3;
+      }
+      .nav {
+        padding: 12px 12px 10px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .nav-group {
+        margin-bottom: 10px;
+        border-top: 1px solid rgba(126, 163, 224, 0.14);
+        padding-top: 10px;
+      }
+      .nav-group:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .group-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: rgba(244, 247, 251, 0.86);
+        font-size: 16px;
+        font-weight: 560;
+        padding: 8px 8px 6px;
+      }
+      .nav-btn {
+        width: 100%; text-align: left; border-radius: 12px; margin: 4px 0;
+        border: 1px solid transparent; background: transparent; color: #c7d9f6;
+        padding: 10px 12px; cursor: pointer; font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .nav-btn:hover {
+        background: rgba(42, 78, 145, 0.2);
+        color: #f4f7fb;
+      }
+      .nav-btn.active {
+        border-color: rgba(95, 155, 255, 0.5);
+        background: linear-gradient(90deg, rgba(30, 107, 255, 0.9), rgba(58, 139, 255, 0.8));
+        color: #f6fbff;
+        box-shadow: 0 8px 18px rgba(30, 107, 255, 0.25);
+      }
+      .nav-sub {
+        margin-left: 8px;
+        padding-left: 8px;
+      }
+      .nav-icon {
+        width: 16px;
+        height: 16px;
+        border: 1.5px solid rgba(206, 223, 251, 0.9);
+        border-radius: 4px;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .nav-icon::after {
+        content: "";
+        position: absolute;
+        width: 6px;
+        height: 1.5px;
+        background: rgba(206, 223, 251, 0.9);
+        left: 4px;
+        top: 7px;
+      }
+      .sidebar-user {
+        border-top: 1px solid rgba(126, 163, 224, 0.18);
+        padding: 14px 14px 16px;
+      }
+      .user-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, rgba(85, 119, 175, 0.9), rgba(46, 74, 122, 0.9));
+        border: 1px solid rgba(126, 163, 224, 0.35);
+      }
+      .user-name {
+        font-size: 15px;
+        color: #f4f7fb;
+      }
+      .user-state {
+        margin-top: 1px;
+        font-size: 12px;
+        color: rgba(244, 247, 251, 0.78);
+      }
+      .main {
+        padding: 14px 18px 18px;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        min-width: 0;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-shrink: 0;
+      }
+      .title { font-size: 22px; font-weight: 700; }
+      .health { font-size: 12px; color: var(--txt-dim); margin-left: 12px; }
+      .top-left { display: flex; align-items: center; }
+      .top-right { display: flex; gap: 8px; align-items: center; }
+      .btn {
+        border: 1px solid var(--line);
+        background: rgba(16, 34, 68, 0.9);
+        color: var(--txt);
+        border-radius: 10px;
+        padding: 7px 12px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .btn.primary {
+        border-color: rgba(126, 177, 255, 0.6);
+        background: linear-gradient(90deg, #2d75f1, #3a8cff);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px;
+      }
+      .card h3 { margin: 0 0 10px; font-size: 16px; color: #dceaff; font-weight: 650; }
+      .overview-row1 {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 22px;
+        align-items: stretch;
+        flex-shrink: 0;
+        min-height: 360px;
+      }
+      .overview-left-col {
+        display: grid;
+        grid-template-rows: 1fr 1fr;
+        gap: 22px;
+        min-height: 0;
+      }
+      .overview-left-col > .card {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .card--kpi {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .grid-2 { display: grid; grid-template-columns: 0.82fr 1.2fr 1.08fr; gap: 10px; margin-top: 10px; }
+      .grid-3 { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-top: 10px; }
+      .page {
+        display: none;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+      }
+      .page.active { display: flex; }
+      .scene {
+        height: 214px;
+        border: 1px solid rgba(110, 155, 226, 0.18);
+        border-radius: 12px;
+        background-image: url("/assets/earth-horizon-reference.png");
+        background-size: cover;
+        background-position: center center;
+        background-repeat: no-repeat;
+        position: relative;
+        overflow: hidden;
+      }
+      .earth {
+        position: absolute; bottom: -100px; left: 10%;
+        width: 80%; height: 180px; border-radius: 50%;
+        border: 1px solid rgba(91, 146, 245, 0.32);
+      }
+      .sat {
+        position: absolute; width: 14px; height: 14px; border-radius: 50%;
+        background: #79beff; box-shadow: 0 0 12px rgba(121, 190, 255, 0.9);
+        transform: translate(-50%, -50%);
+      }
+      .sat.sat--remote {
+        background: #8cc6ff;
+        box-shadow: 0 0 12px rgba(140, 198, 255, 0.95);
+      }
+      .sat.sat--compute {
+        background: #65e2d1;
+        box-shadow: 0 0 12px rgba(101, 226, 209, 0.95);
+      }
+      .sat-label { position: absolute; font-size: 11px; color: #daebff; white-space: nowrap; }
+      .line { position: absolute; border-top: 1px dashed rgba(129, 191, 255, 0.8); transform-origin: left center; }
+      .line.l2 { border-top-color: rgba(99, 230, 211, 0.85); }
+      .legend { margin-top: 8px; color: var(--txt-dim); font-size: 12px; }
+      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 8px; }
+      .flow-stack {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        max-width: 100%;
+      }
+      .flow-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      .flow-stack .step {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 47%;
+        min-height: 102px;
+        text-align: center;
+        padding: 8px 6px;
+        border: 1px solid rgba(115, 159, 227, 0.24);
+        border-radius: 12px;
+        background: rgba(10, 25, 51, 0.76);
+        font-size: 13px;
+      }
+      .flow-stack .arrow { flex-shrink: 0; }
+      .flow-stack .icon {
+        width: 30px; height: 30px; border-radius: 50%;
+        margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(145deg, #345eb8, #22448e); font-size: 14px;
+      }
+      .arrow { color: #7db4ff; font-size: 17px; }
+      .kpi { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 8px; }
+      .kpi-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .kpi-col { display: grid; gap: 8px; grid-auto-rows: 1fr; }
+      .kpi-item {
+        border: 1px solid var(--line); border-radius: 12px;
+        background: rgba(10, 23, 47, 0.86); padding: 10px;
+        min-height: 96px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .kpi-k { font-size: 12px; color: var(--txt-dim); }
+      .kpi-v { margin-top: 4px; font-size: 30px; font-weight: 700; }
+      .kpi-sub { margin-top: 2px; font-size: 12px; color: #8fd8a8; }
+      .summary-block {
+        border: 1px solid rgba(108, 154, 221, 0.2);
+        border-radius: 10px;
+        background: rgba(8, 22, 45, 0.68);
+        padding: 8px 9px;
+        margin-bottom: 8px;
+      }
+      .summary-block .t { font-size: 12px; color: #8ec6ff; margin-bottom: 4px; }
+      .summary-block .v { font-size: 12px; color: #dceaff; line-height: 1.5; }
+      .tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+      .tab {
+        font-size: 12px; border-radius: 999px; padding: 4px 9px;
+        border: 1px solid rgba(104, 149, 217, 0.25); color: #99bbe7;
+        cursor: pointer;
+      }
+      .tab.active { background: rgba(46, 99, 197, 0.42); color: #edf4ff; }
+      .perf-panel { display: none; }
+      .perf-panel.active { display: block; }
+      .overview-row2 {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.32fr) minmax(0, 1fr);
+        gap: 22px;
+        margin-top: 22px;
+        align-items: stretch;
+        flex: 1;
+        min-height: 0;
+      }
+      .overview-row2 > .card {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .overview-row2 > .card > h3 { flex-shrink: 0; }
+      .overview-row2 > .card #configSummary {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .overview-row2 > .card > .tabs { flex-shrink: 0; }
+      .overview-row2 > .card > .perf-panel {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      .overview-row2 > .card > .perf-panel .donut-wrap {
+        min-height: 200px;
+      }
+      .overview-row2 > .card > .perf-panel .chart.chart--perf {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        display: block;
+        aspect-ratio: 1100 / 420;
+      }
+      .card--taskflow {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .card--taskflow .flow-stack { flex: 1; }
+      .donut-wrap { display: grid; grid-template-columns: 200px 1fr; gap: 8px; align-items: center; }
+      .donut { width: 180px; height: 180px; position: relative; margin: 0 auto; }
+      .donut svg { transform: rotate(-90deg); }
+      .donut-center {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+      }
+      .donut .donut-center { display: none !important; }
+      .donut-center .big { font-size: 27px; font-weight: 700; }
+      .donut-center .sub { font-size: 12px; color: var(--txt-dim); }
+      .legend-item {
+        display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 6px;
+        color: var(--txt-dim); font-size: 12px;
+      }
+      .legend-item b { color: #ebf3ff; font-weight: 600; }
+      .chart {
+        width: 100%;
+        height: 250px;
+        border: 1px solid rgba(111, 154, 220, 0.2);
+        border-radius: 12px;
+        background: linear-gradient(180deg, rgba(8, 20, 41, 0.95), rgba(6, 15, 31, 0.98));
+      }
+      .muted { color: #9fbbe6; font-size: 12px; }
+      .unsupported-metric { color: rgba(168, 189, 223, 0.58) !important; }
+      /* —— 实验管理（新版）—— */
+      .exp-shell {
+        display: grid;
+        grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr);
+        gap: 18px;
+        flex: 1;
+        min-height: 0;
+        align-items: stretch;
+      }
+      .exp-left-col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 0;
+      }
+      .exp-template-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .exp-template-btn {
+        text-align: left;
+        border-radius: 12px;
+        border: 1px solid rgba(104, 149, 217, 0.35);
+        background: rgba(10, 24, 52, 0.75);
+        color: #dceaff;
+        padding: 12px 12px;
+        cursor: pointer;
+        transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+      }
+      .exp-template-btn:hover {
+        border-color: rgba(126, 177, 255, 0.55);
+        background: rgba(18, 40, 82, 0.85);
+      }
+      .exp-template-btn.active {
+        border-color: rgba(95, 155, 255, 0.75);
+        box-shadow: 0 0 0 1px rgba(58, 139, 255, 0.35), 0 8px 22px rgba(30, 107, 255, 0.22);
+        background: linear-gradient(135deg, rgba(30, 90, 180, 0.45), rgba(20, 50, 110, 0.55));
+      }
+      .exp-template-btn .t { font-size: 14px; font-weight: 650; color: #f4f7fb; }
+      .exp-template-btn .d { margin-top: 4px; font-size: 11px; color: var(--txt-dim); line-height: 1.35; }
+      .exp-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .exp-card-head h3 { margin: 0; }
+      .exp-card-head-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+      .btn-sm { padding: 4px 10px; font-size: 12px; }
+      .exp-task-list {
+        flex: 1;
+        min-height: 120px;
+        max-height: 42vh;
+        overflow-y: auto;
+        border: 1px solid rgba(104, 149, 217, 0.2);
+        border-radius: 10px;
+        background: rgba(6, 16, 34, 0.55);
+      }
+      .exp-task-row {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(104, 149, 217, 0.12);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .exp-task-row:hover { background: rgba(42, 78, 145, 0.2); }
+      .exp-task-row:last-child { border-bottom: 0; }
+      .exp-task-row .meta { font-size: 11px; color: var(--txt-dim); margin-top: 4px; }
+      .exp-task-row.active { background: rgba(46, 99, 197, 0.28); }
+      .exp-config-card { min-height: 0; display: flex; flex-direction: column; max-height: calc(100vh - 140px); overflow-y: auto; }
+      .exp-config-card .form-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+      .exp-other-params {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(104, 149, 217, 0.28);
+        background: rgba(6, 18, 42, 0.55);
+      }
+      .exp-other-params > h4 { margin: 0 0 12px; font-size: 15px; color: #eaf2ff; }
+      .exp-subcard {
+        margin-bottom: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(104, 149, 217, 0.18);
+        background: rgba(8, 22, 48, 0.5);
+      }
+      .exp-subcard:last-child { margin-bottom: 0; }
+      .exp-subcard h5 { margin: 0 0 10px; font-size: 13px; color: #cfe6ff; font-weight: 650; }
+      .exp-subcard .form-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+      .exp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .exp-run-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        flex: 1;
+        min-height: 0;
+      }
+      .exp-run-metric {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      .exp-metric-tile {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(8, 22, 45, 0.72);
+      }
+      .exp-metric-tile .k { font-size: 11px; color: var(--txt-dim); }
+      .exp-metric-tile .v { margin-top: 4px; font-size: 22px; font-weight: 700; color: #eaf2ff; }
+      .exp-progress-wrap { margin-top: 8px; }
+      .exp-progress-bar {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(20, 40, 80, 0.8);
+        overflow: hidden;
+        border: 1px solid rgba(104, 149, 217, 0.25);
+      }
+      .exp-progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2d75f1, #3fd389);
+        width: 0%;
+        transition: width 0.25s ease;
+      }
+      .exp-log {
+        flex: 1;
+        min-height: 160px;
+        max-height: 38vh;
+        overflow-y: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(104, 149, 217, 0.2);
+        background: #050d1c;
+        color: #b8d4ff;
+        white-space: pre-wrap;
+      }
+      .exp-results-shell {
+        display: grid;
+        grid-template-columns: minmax(220px, 300px) 1fr;
+        gap: 14px;
+        align-items: stretch;
+        flex: 1;
+        min-height: min(72vh, 720px);
+      }
+      .exp-results-sidebar {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+      }
+      .exp-results-run-list {
+        flex: 1;
+        min-height: 120px;
+        overflow-y: auto;
+        border: 1px solid rgba(104, 149, 217, 0.2);
+        border-radius: 10px;
+        background: rgba(6, 16, 34, 0.55);
+      }
+      .exp-results-run-item {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(104, 149, 217, 0.12);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .exp-results-run-item:hover { background: rgba(42, 78, 145, 0.2); }
+      .exp-results-run-item.active { background: rgba(46, 99, 197, 0.32); }
+      .exp-results-run-item .meta { font-size: 11px; color: var(--txt-dim); margin-top: 4px; }
+      .exp-task-list .exp-results-run-item:last-child { border-bottom: 0; }
+      .exp-results-main { min-height: 0; display: flex; flex-direction: column; }
+      .exp-results-main-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .exp-results-four-charts,
+      .exp-results-four-heatmaps {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px 14px;
+        align-items: start;
+      }
+      .exp-results-bar-block {
+        display: block;
+        max-width: 920px;
+        margin: 0 auto;
+      }
+      .exp-chart-cell h4.exp-chart-caption {
+        margin: 0 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--txt-muted, #9fbbe6);
+      }
+      .exp-chart-cell .chart { width: 100%; height: auto; display: block; border-radius: 10px; }
+      .exp-heatmap-wrap { flex: 1; min-height: 180px; position: relative; }
+      .exp-heatmap-wrap canvas { width: 100%; height: 100%; display: block; border-radius: 10px; }
+      .exp-table-wrap { flex: 1; overflow: auto; max-height: 280px; }
+      .exp-data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .exp-data-table th, .exp-data-table td {
+        border: 1px solid rgba(104, 149, 217, 0.22);
+        padding: 6px 8px;
+        text-align: left;
+      }
+      .exp-data-table th { background: rgba(20, 50, 100, 0.45); color: #cfe6ff; }
+      .debug-json { display: none !important; }
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(240px, 1fr));
+        gap: 10px;
+      }
+      .field label { display: block; font-size: 12px; color: var(--txt-dim); margin-bottom: 4px; }
+      .field input, .field select, .field textarea {
+        width: 100%;
+        background: #0c1d3d;
+        color: #dbeaff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 9px;
+      }
+      .field textarea {
+        min-height: 132px;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        line-height: 1.4;
+      }
+      .model-struct-grid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .model-struct-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(12, 29, 61, 0.35);
+      }
+      .model-struct-card h4 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #cfe0ff;
+      }
+      .constellation-title {
+        margin: 0 0 20px;
+      }
+      .constellation-title h2 {
+        margin: 0;
+        font-size: 38px;
+        font-weight: 680;
+        line-height: 1.15;
+        color: #f4f7fb;
+      }
+      .constellation-title p {
+        margin: 8px 0 0;
+        font-size: 14px;
+        color: rgba(244, 247, 251, 0.58);
+      }
+      .constellation-shell {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "structure orbit"
+          "topology topology";
+        gap: 22px;
+      }
+      .const-cell-structure { grid-area: structure; }
+      .const-cell-topology { grid-area: topology; }
+      .const-cell-orbit { grid-area: orbit; }
+      .const-card {
+        padding: 20px 22px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(10, 22, 40, 0.94), rgba(9, 20, 36, 0.9));
+        box-shadow: inset 0 1px 0 rgba(123, 171, 255, 0.12);
+        height: 100%;
+      }
+      .const-section {
+        border: 1px solid rgba(120, 160, 220, 0.16);
+        border-radius: 14px;
+        padding: 14px;
+        background: rgba(8, 22, 45, 0.55);
+      }
+      .const-section h4 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #f4f7fb;
+      }
+      .const-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .const-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .const-field label {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 5px;
+        color: rgba(244, 247, 251, 0.75);
+      }
+      .const-field input, .const-field select {
+        width: 100%;
+        height: 42px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(120, 160, 220, 0.22);
+        background: rgba(10, 24, 47, 0.95);
+        color: #f4f7fb;
+        font-size: 15px;
+      }
+      .const-note { margin-top: 8px; color: rgba(244, 247, 251, 0.5); font-size: 12px; }
+      .topology-map {
+        height: auto;
+        min-height: 0;
+        aspect-ratio: 764 / 267;
+        border: 1px solid rgba(120, 160, 220, 0.16);
+        border-radius: 14px;
+        background-image: url("/assets/earth-horizon-reference.png");
+        background-size: 100% auto;
+        background-position: center center;
+        background-repeat: no-repeat;
+        background-color: #030a16;
+        position: relative;
+        overflow: hidden;
+      }
+      .topology-earth {
+        position: absolute;
+        width: 78%;
+        height: 150px;
+        left: 11%;
+        bottom: -88px;
+        border-radius: 50%;
+        border: 1px solid rgba(91, 146, 245, 0.28);
+      }
+      .topo-node {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #79beff;
+        box-shadow: 0 0 12px rgba(121, 190, 255, 0.8);
+        transform: translate(-50%, -50%);
+      }
+      .topo-node.topo-node--remote {
+        background: #8cc6ff;
+        box-shadow: 0 0 12px rgba(140, 198, 255, 0.9);
+      }
+      .topo-node.topo-node--compute {
+        background: #65e2d1;
+        box-shadow: 0 0 12px rgba(101, 226, 209, 0.9);
+      }
+      .topo-label {
+        position: absolute;
+        font-size: 12px;
+        color: #dcecff;
+        white-space: nowrap;
+      }
+      .topo-line {
+        position: absolute;
+        border-top: 1px dashed rgba(129, 191, 255, 0.78);
+        transform-origin: left center;
+      }
+      .topo-line.l2 { border-top-color: rgba(99, 230, 211, 0.82); }
+      .const-summary-card {
+        padding: 20px 18px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(11, 24, 45, 0.94), rgba(8, 20, 38, 0.92));
+        box-shadow: inset 0 1px 0 rgba(125, 176, 255, 0.1);
+      }
+      .const-summary-title { font-size: 20px; font-weight: 620; margin-bottom: 12px; }
+      .summary-line {
+        border: 1px solid rgba(120, 160, 220, 0.14);
+        background: rgba(9, 22, 42, 0.8);
+        border-radius: 12px;
+        padding: 10px 11px;
+        margin-bottom: 10px;
+      }
+      .summary-line .k { color: rgba(244, 247, 251, 0.52); font-size: 12px; margin-bottom: 4px; }
+      .summary-line .v {
+        color: #f4f7fb;
+        font-size: 15px;
+        font-weight: 560;
+        line-height: 1.45;
+      }
+      .summary-state {
+        margin-top: 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(94, 168, 255, 0.25);
+        background: rgba(25, 67, 126, 0.2);
+        padding: 10px 12px;
+        color: #a8ceff;
+        font-size: 13px;
+      }
+      .const-pagination {
+        margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .const-pagination .meta { color: rgba(244, 247, 251, 0.5); font-size: 13px; }
+      .pager { display: flex; gap: 10px; }
+      .btn.ghost { background: rgba(14, 30, 58, 0.92); }
+      pre {
+        margin: 8px 0 0; max-height: 240px; overflow: auto;
+        background: #081226; border: 1px solid var(--line);
+        color: #cbe0ff; border-radius: 10px; padding: 10px;
+      }
+      .footer {
+        text-align: right;
+        margin-top: 8px;
+        color: #7e9aca;
+        font-size: 11px;
+        flex-shrink: 0;
+      }
+
+      /* 概览页：除侧栏外整体字号加大一档 */
+      .main.main--overview > .topbar .title { font-size: 26px; }
+      .main.main--overview > .topbar .health { font-size: 14px; }
+      .main.main--overview > .topbar .btn { font-size: 15px; padding: 8px 14px; }
+      .main.main--overview > .footer { font-size: 13px; }
+      .main.main--overview #page-overview .card h3 { font-size: 18px; }
+      .main.main--overview #page-overview .legend { font-size: 14px; }
+      .main.main--overview #page-overview .sat-label { font-size: 13px; }
+      .main.main--overview #page-overview .flow-stack .step { font-size: 15px; }
+      .main.main--overview #page-overview .flow-stack .icon {
+        width: 34px; height: 34px; font-size: 16px;
+      }
+      .main.main--overview #page-overview .scene { height: 236px; }
+      .main.main--overview #page-overview .flow-stack .step { min-height: 112px; }
+      .main.main--overview #page-overview .arrow { font-size: 19px; }
+      .main.main--overview #page-overview .kpi-k { font-size: 14px; }
+      .main.main--overview #page-overview .kpi-v { font-size: 34px; }
+      .main.main--overview #page-overview .kpi-sub { font-size: 14px; }
+      .main.main--overview #page-overview .summary-block .t { font-size: 14px; }
+      .main.main--overview #page-overview .summary-block .v { font-size: 14px; }
+      .main.main--overview #page-overview .tab { font-size: 14px; padding: 6px 12px; }
+      .main.main--overview #page-overview .legend-item { font-size: 14px; }
+      .main.main--overview #page-overview .donut-center .big { font-size: 31px; }
+      .main.main--overview #page-overview .donut-center .sub { font-size: 14px; }
+      .main.main--overview #page-overview .overview-row2 > .card > .perf-panel .donut-wrap {
+        min-height: 230px;
+      }
+      .main.main--overview #page-overview .overview-row2 .donut {
+        transform: scale(1.14);
+        transform-origin: center center;
+      }
+
+      @media (max-width: 1500px) {
+        .app { grid-template-columns: 1fr; }
+        .sidebar { position: static; height: auto; }
+        .grid-2, .grid-3, .form-grid, .const-grid-2, .const-grid-3 {
+          grid-template-columns: 1fr;
+        }
+        .overview-row1, .overview-row2 {
+          grid-template-columns: 1fr;
+        }
+        .constellation-shell {
+          grid-template-columns: 1fr;
+          grid-template-areas:
+            "structure"
+            "topology"
+            "orbit";
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="side-logo">
+          <div class="brand">
+            <div class="brand-logo"></div>
+            <div>
+              <p class="name-cn">SCSP仿真平台</p>
+              <div class="sub">Spaceborne Computing Simulation<br/>Platform（天基计算仿真平台）</div>
+            </div>
+          </div>
+        </div>
+        <nav class="nav">
+          <div class="nav-group">
+            <button class="nav-btn active" data-page="overview"><span class="nav-icon"></span>概览</button>
+          </div>
+
+          <div class="nav-group">
+            <div class="group-title"><span>仿真设置</span><span>⌄</span></div>
+            <div class="nav-sub">
+              <button class="nav-btn" data-page="constellation"><span class="nav-icon"></span>星座构型配置</button>
+              <button class="nav-btn" data-page="model"><span class="nav-icon"></span>模型部署配置</button>
+              <button class="nav-btn" data-page="compute"><span class="nav-icon"></span>算力节点配置</button>
+              <button class="nav-btn" data-page="link"><span class="nav-icon"></span>通信链路配置</button>
+              <button class="nav-btn" data-page="application"><span class="nav-icon"></span>天基应用配置</button>
+            </div>
+          </div>
+
+          <div class="nav-group">
+            <div class="group-title"><span>实验管理</span></div>
+            <div class="nav-sub">
+              <button class="nav-btn" data-page="experiment-design"><span class="nav-icon"></span>实验设计</button>
+              <button class="nav-btn" data-page="experiment-results"><span class="nav-icon"></span>实验结果</button>
+            </div>
+          </div>
+        </nav>
+      </aside>
+      <main class="main" id="mainRoot">
+        <div class="topbar">
+          <div class="top-left">
+            <div class="title" id="pageTitle">概览</div>
+            <div class="health" id="healthText">API 状态：检测中...</div>
+          </div>
+          <div class="top-right">
+            <button class="btn" id="btnSaveExperiment">保存当前实验</button>
+            <button class="btn" id="btnRunSingle">单点仿真</button>
+            <button class="btn primary" id="btnRunSweep">运行仿真</button>
+          </div>
+        </div>
+
+        <section class="page active" id="page-overview">
+          <section class="overview-row1">
+            <div class="overview-left-col">
+              <div class="card">
+                <h3>星座构型</h3>
+                <div class="scene" id="scene"></div>
+                <div class="legend">
+                  <span class="dot" style="background:#8cc6ff"></span>遥感星 → 计算星链路
+                  <span class="dot" style="background:#65e2d1"></span>计算星 ↔ 计算星链路
+                  <span class="dot" style="background:#f5b06a"></span>星地链路（预留）
+                </div>
+              </div>
+              <div class="card card--taskflow">
+                <h3>任务流程</h3>
+                <div class="flow-stack">
+                  <div class="flow-row">
+                    <div class="step"><div class="icon">🛰️</div><div>遥感星采集图像</div></div>
+                    <div class="arrow">→</div>
+                    <div class="step"><div class="icon">📡</div><div>数据发送至计算星</div></div>
+                  </div>
+                  <div class="flow-row">
+                    <div class="step"><div class="icon">🧠</div><div>双星协同推理（流水线并行）</div></div>
+                    <div class="arrow">→</div>
+                    <div class="step"><div class="icon">📄</div><div>输出结果（在轨处理）</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card card--kpi">
+              <h3>关键指标</h3>
+              <div class="kpi-split">
+                <div class="kpi-col">
+                  <div class="kpi-item"><div class="kpi-k">Prefill时延（ms）</div><div class="kpi-v" id="kpiPrefillLatency">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Prefill计算项时延（s/patch）</div><div class="kpi-v" id="kpiPrefillComputeTime">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Prefill访存项时延（s/patch）</div><div class="kpi-v" id="kpiPrefillMemoryTime">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Prefill主导瓶颈</div><div class="kpi-v" id="kpiPrefillBottleneck">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Prefill有效算力（PFLOPS）</div><div class="kpi-v" id="kpiPrefillPflops">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">单星峰值显存占用（GB）</div><div class="kpi-v" id="kpiPrefillPeakMem">-</div></div>
+                </div>
+                <div class="kpi-col">
+                  <div class="kpi-item"><div class="kpi-k">Decode时延（ms）</div><div class="kpi-v" id="kpiDecodeLatency">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Decode计算项时延（ms/token）</div><div class="kpi-v" id="kpiDecodeComputeTime">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Decode访存项时延（ms/token）</div><div class="kpi-v" id="kpiDecodeMemoryTime">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Decode主导瓶颈</div><div class="kpi-v" id="kpiDecodeBottleneck">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Decode有效算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodePflops">-</div></div>
+                  <div class="kpi-item"><div class="kpi-k">Decode能效（tokens/J）</div><div class="kpi-v" id="kpiDecodeEnergyEfficiency">-</div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="overview-row2">
+            <div class="card">
+              <h3>实验配置概览</h3>
+              <div id="configSummary"></div>
+            </div>
+            <div class="card">
+              <h3>性能分析</h3>
+              <div class="tabs">
+                <span class="tab active" data-perf-tab="decompose">时延分解</span>
+                <span class="tab" data-perf-tab="bandwidth">星间互联带宽敏感性分析</span>
+                <span class="tab" data-perf-tab="compute">算力敏感性分析</span>
+              </div>
+              <div class="perf-panel active" id="perf-panel-decompose">
+                <div class="donut-wrap">
+                  <div class="donut" id="donut"></div>
+                  <div id="delayLegend"></div>
+                </div>
+              </div>
+              <div class="perf-panel" id="perf-panel-bandwidth">
+                <canvas class="chart chart--perf" id="bwSensitivityChart" width="1100" height="420"></canvas>
+              </div>
+              <div class="perf-panel" id="perf-panel-compute">
+                <canvas class="chart chart--perf" id="computeSensitivityChart" width="1100" height="420"></canvas>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-constellation">
+          <div class="constellation-shell">
+            <div class="const-cell-structure">
+              <div class="card">
+                <h3>星座结构</h3>
+                <div class="form-grid">
+                  <div class="field"><label>计算星间距 (km)</label><input id="cfgInterSatDistance" type="number" min="1" step="1" /></div>
+                  <div class="field"><label>计算星数量</label><input id="cfgComputeCount" type="number" min="1" max="4" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="const-cell-topology">
+              <div class="card">
+                <h3>星座拓扑示意</h3>
+                <div class="topology-map" id="constTopologyMap"></div>
+              </div>
+            </div>
+
+            <div class="const-cell-orbit">
+              <div class="card">
+                <h3>轨道参数</h3>
+                <div class="form-grid">
+                  <div class="field"><label>遥感星轨道高度 (km)</label><input id="cfgRemoteAlt" type="number" /></div>
+                  <div class="field"><label>计算星轨道高度 (km)</label><input id="cfgComputeAlt" type="number" /></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <section class="page" id="page-model">
+          <div class="card">
+            <div class="form-grid">
+              <div class="field">
+                <label>模型名称</label>
+                <select id="cfgModelName">
+                  <option value="Qwen2.5-VL-7B">Qwen2.5-VL-7B</option>
+                  <option value="Qwen2.5-VL-32B">Qwen2.5-VL-32B</option>
+                  <option value="Qwen2.5-VL-3B">Qwen2.5-VL-3B</option>
+                </select>
+              </div>
+              <div class="field"><label>模型参数量（驻留）</label><input id="cfgModelParams" type="text" placeholder="例：7B" /></div>
+              <div class="field"><label>激活参数量</label><input id="cfgActiveModelParams" type="text" placeholder="例：22B" /></div>
+              <div class="field"><label>DP</label><input id="cfgDp" type="number" min="1" step="1" /></div>
+              <div class="field"><label>TP</label><input id="cfgTp" type="number" min="1" step="1" /></div>
+              <div class="field"><label>PP</label><input id="cfgPp" type="number" min="1" step="1" /></div>
+              <div class="field"><label>Mixed precision</label><input id="cfgMixedPrecision" type="checkbox" /></div>
+              <div class="field"><label>流水线切分比例</label><input id="cfgStageSplit" type="number" step="0.01" /></div>
+              <div class="field"><label>预填充计算量 GFLOPs / patch</label><input id="cfgFlops" type="number" step="0.1" /></div>
+              <div class="field"><label>预填充访存量 GB / patch</label><input id="cfgPrefillMemoryGB" type="number" step="0.001" /></div>
+              <div class="field"><label>解码计算量 GFLOPs / token</label><input id="cfgDecodeFlopsPerToken" type="number" step="0.1" /></div>
+              <div class="field"><label>解码访存量 GB / token</label><input id="cfgDecodeMemoryGB" type="number" step="0.000001" /></div>
+              <div class="field"><label>Prefill 中间传输量 (MB)</label><input id="cfgPrefillInterStageTransfer" type="number" step="0.000001" /></div>
+              <div class="field"><label>Decode 中间传输量 (KB)</label><input id="cfgDecodeInterStageTransfer" type="number" step="0.000001" /></div>
+            </div>
+            <div class="model-struct-grid">
+              <div class="model-struct-card">
+                <h4>模型类型与结构类型</h4>
+                <div class="field">
+                  <label>模型类型</label>
+                  <select id="cfgModelType">
+                    <option value="llm">LLM</option>
+                    <option value="vlm">VLM</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>结构类型</label>
+                  <select id="cfgStructureType">
+                    <option value="dense">Dense</option>
+                    <option value="moe">MoE</option>
+                  </select>
+                </div>
+              </div>
+              <div class="model-struct-card">
+                <h4>LLM主干结构</h4>
+                <div class="field"><label>num_hidden_layers</label><input id="cfgLlmNumHiddenLayers" type="number" step="1" /></div>
+                <div class="field"><label>hidden_size</label><input id="cfgLlmHiddenSize" type="number" step="1" /></div>
+                <div class="field"><label>intermediate_size</label><input id="cfgLlmIntermediateSize" type="number" step="1" /></div>
+                <div class="field"><label>num_attention_heads</label><input id="cfgLlmAttentionHeads" type="number" step="1" /></div>
+                <div class="field"><label>num_key_value_heads</label><input id="cfgLlmKvHeads" type="number" step="1" /></div>
+              </div>
+              <div class="model-struct-card" id="visionStructCard">
+                <h4>视觉编码器结构</h4>
+                <div class="field"><label>depth</label><input id="cfgVisionDepth" type="number" step="1" /></div>
+                <div class="field"><label>hidden_size</label><input id="cfgVisionHiddenSize" type="number" step="1" /></div>
+                <div class="field"><label>patch_size</label><input id="cfgVisionPatchSize" type="number" step="1" /></div>
+                <div class="field"><label>spatial_merge_size</label><input id="cfgVisionSpatialMerge" type="number" step="1" /></div>
+                <div class="field"><label>out_hidden_size</label><input id="cfgVisionOutHiddenSize" type="number" step="1" /></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-compute">
+          <div class="card">
+            <div class="form-grid">
+              <div class="field"><label>单星峰值算力 (PFLOPS)</label><input id="cfgPeakPflopsSingle" type="number" step="0.1" /></div>
+              <div class="field"><label>单星峰值算力 — 扫描列表 (PFLOPS，逗号分隔)</label><input id="cfgPeakPflopsSweep" type="text" placeholder="例：6,8,10,12,14" /></div>
+              <div class="field"><label>Prefill算力利用率</label><input id="cfgPrefillComputeUtil" type="number" step="0.01" /></div>
+              <div class="field"><label>Prefill访存利用率</label><input id="cfgPrefillMemoryUtil" type="number" step="0.01" /></div>
+              <div class="field"><label>Decode算力利用率</label><input id="cfgDecodeComputeUtil" type="number" step="0.01" /></div>
+              <div class="field"><label>Decode访存利用率</label><input id="cfgDecodeMemoryUtil" type="number" step="0.01" /></div>
+              <div class="field"><label>单星显存带宽 (TB/s)</label><input id="cfgMemoryBandwidthTBps" type="number" step="0.1" min="0.1" /></div>
+              <div class="field"><label>ASTRA 本地显存带宽 (GB/s)</label><input id="cfgLocalMemBwGbps" type="number" step="1" min="1" /></div>
+              <div class="field"><label>单星计算载荷功率 (kW)</label><input id="cfgPowerLimit" type="number" step="0.1" min="0.1" /></div>
+              <div class="field"><label>峰值显存 (GB)</label><input id="cfgVram" type="number" /></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-link">
+          <div class="card">
+            <div class="form-grid">
+              <div class="field"><label>星间互联带宽 (Gbps)</label><input id="cfgBandwidthSingle" type="number" step="1" min="1" /></div>
+              <div class="field"><label>星间互联带宽扫描 (Gbps，逗号分隔)</label><input id="cfgBandwidthSweep" type="text" placeholder="例：10,50,100,200,400" /></div>
+              <div class="field">
+                <label>计算星间链路模式</label>
+                <select id="cfgLinkModeComputeInter">
+                  <option value="同轨稳定链路">同轨稳定链路</option>
+                  <option value="异轨条件链路">异轨条件链路</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>遥感-计算星间链路模式</label>
+                <select id="cfgLinkModeRemoteCompute">
+                  <option value="同轨稳定链路">同轨稳定链路</option>
+                  <option value="异轨条件链路">异轨条件链路</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-application">
+          <div class="card">
+            <div class="muted">当前保留应用模板接入位：遥感识别、在轨预警、轨道目标检测。后续可将任务模板映射为仿真输入。</div>
+            <div class="form-grid" style="margin-top: 14px;">
+              <div class="field"><label>图像分辨率</label><input id="cfgImageResolution" type="text" placeholder="例：512x512" /></div>
+              <div class="field"><label>切块大小</label><input id="cfgTileSize" type="text" /></div>
+              <div class="field"><label>Decode tokens</label><input id="cfgDecodeTokens" type="number" min="1" step="1" /></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-experiment-design">
+          <div class="exp-shell">
+            <div class="exp-left-col">
+              <div class="card">
+                <h3>实验模板</h3>
+                <div class="muted" style="margin-bottom:10px;">选择模板后，在右侧填写参数并点击「启动实验」；与顶部「保存当前实验」落库可并行使用。</div>
+                <div class="exp-template-grid" id="expTemplateGrid"></div>
+              </div>
+              <div class="card" style="flex:1; min-height:0; display:flex; flex-direction:column;">
+                <div class="exp-card-head">
+                  <h3>实验任务列表</h3>
+                  <div class="exp-card-head-actions">
+                    <button type="button" class="btn btn-sm" id="btnExpRefreshList">刷新</button>
+                    <button type="button" class="btn btn-sm" id="btnExpTaskListClear">清空</button>
+                  </div>
+                </div>
+                <div class="muted" style="font-size:12px;margin-bottom:8px;">与「实验结果」页实验列表相同；点击条目将打开实验结果并选中该项。</div>
+                <div class="exp-task-list" id="expTaskList"></div>
+              </div>
+            </div>
+            <div class="card exp-config-card">
+              <h3>实验配置</h3>
+              <div class="form-grid">
+                <div class="field" id="expCfgModelFieldWrap">
+                  <label>模型</label>
+                  <select id="expCfgModel">
+                    <option value="Qwen2.5-VL-3B">Qwen2.5-VL-3B</option>
+                    <option value="Qwen2.5-VL-7B">Qwen2.5-VL-7B</option>
+                    <option value="Qwen2.5-VL-32B">Qwen2.5-VL-32B</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>编队</label>
+                  <select id="expCfgFormation">
+                    <option value="紧密">紧密编队</option>
+                    <option value="分散">分散编队</option>
+                  </select>
+                </div>
+                <div class="field" id="expCfgPflopsFieldWrap">
+                  <label>单星峰值算力 (PFLOPS)</label>
+                  <input id="expCfgPflops" type="number" step="0.1" min="0.1" />
+                </div>
+                <div class="field" id="expCfgBwFieldWrap">
+                  <label>星间互联带宽 (Gbps)</label>
+                  <input id="expCfgBw" type="number" step="1" min="1" />
+                </div>
+                <div class="field" style="grid-column: 1 / -1;" id="expCfgScanFieldWrap">
+                  <label id="expCfgScanLabel">扫描参数范围</label>
+                  <input id="expCfgScan" type="text" placeholder="例：10,50,100,200 或 6,8,10,12" />
+                </div>
+              </div>
+              <div class="exp-actions">
+                <button type="button" class="btn" id="btnExpSyncFromGlobal">从全局仿真配置同步</button>
+                <button type="button" class="btn primary" id="btnExpStart">启动实验</button>
+              </div>
+              <div class="exp-other-params">
+                <h4>其他参数</h4>
+                <div class="exp-subcard">
+                  <h5>星座与轨道</h5>
+                  <div class="form-grid">
+                    <div class="field"><label>遥感星轨道高度 (km)</label><input id="x_cfgRemoteAlt" type="number" step="1" /></div>
+                    <div class="field"><label>计算星轨道高度 (km)</label><input id="x_cfgComputeAlt" type="number" step="1" /></div>
+                    <div class="field"><label>计算星数量</label><input id="x_cfgComputeCount" type="number" min="1" max="4" step="1" /></div>
+                    <div class="field" id="expMirrorInterSatDistWrap">
+                      <label>计算星间距 (km)</label><input id="x_cfgInterSatDistance" type="number" min="1" step="1" />
+                    </div>
+                  </div>
+                </div>
+                <div class="exp-subcard">
+                  <h5>算力与利用率</h5>
+                  <div class="form-grid">
+                    <div class="field"><label>Prefill算力利用率</label><input id="x_cfgPrefillComputeUtil" type="number" step="0.01" /></div>
+                    <div class="field"><label>Prefill访存利用率</label><input id="x_cfgPrefillMemoryUtil" type="number" step="0.01" /></div>
+                    <div class="field"><label>Decode算力利用率</label><input id="x_cfgDecodeComputeUtil" type="number" step="0.01" /></div>
+                    <div class="field"><label>Decode访存利用率</label><input id="x_cfgDecodeMemoryUtil" type="number" step="0.01" /></div>
+                    <div class="field"><label>单星显存带宽 (TB/s)</label><input id="x_cfgMemoryBandwidthTBps" type="number" step="0.1" min="0.1" /></div>
+                    <div class="field"><label>ASTRA 本地显存带宽 (GB/s)</label><input id="x_cfgLocalMemBwGbps" type="number" step="1" min="1" /></div>
+                    <div class="field"><label>单星计算载荷功率 (kW)</label><input id="x_cfgPowerLimit" type="number" step="0.1" min="0.1" /></div>
+                    <div class="field"><label>峰值显存 (GB)</label><input id="x_cfgVram" type="number" step="1" /></div>
+                  </div>
+                </div>
+                <div class="exp-subcard">
+                  <h5>链路与模式</h5>
+                  <div class="form-grid">
+                    <div class="field"><label>计算星间链路模式</label><select id="x_cfgLinkModeComputeInter"><option value="同轨稳定链路">同轨稳定链路</option><option value="异轨条件链路">异轨条件链路</option></select></div>
+                    <div class="field"><label>遥感-计算星间链路模式</label><select id="x_cfgLinkModeRemoteCompute"><option value="同轨稳定链路">同轨稳定链路</option><option value="异轨条件链路">异轨条件链路</option></select></div>
+                  </div>
+                </div>
+                <div class="exp-subcard">
+                  <h5>任务与图像</h5>
+                  <div class="form-grid">
+                    <div class="field"><label>图像分辨率</label><input id="x_cfgImageResolution" type="text" placeholder="例：512x512" /></div>
+                    <div class="field"><label>切块大小</label><input id="x_cfgTileSize" type="text" /></div>
+                    <div class="field"><label>Decode tokens</label><input id="x_cfgDecodeTokens" type="number" min="1" step="1" /></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-experiment-results">
+          <div class="exp-results-shell">
+            <aside class="card exp-results-sidebar">
+              <div class="exp-card-head">
+                <h3 style="margin:0;">实验列表</h3>
+                <div class="exp-card-head-actions">
+                  <button type="button" class="btn btn-sm" id="btnExpResultsListRefresh">刷新</button>
+                  <button type="button" class="btn btn-sm" id="btnExpResultsListClear">清空</button>
+                </div>
+              </div>
+              <div class="muted" style="font-size:12px;margin-bottom:8px;">已完成实验显示于此；点击条目在右侧查看 Prefill 延时与 Decode 速度。</div>
+              <div class="exp-results-run-list" id="expResultsRunList"></div>
+            </aside>
+            <div class="card exp-results-main">
+              <div class="exp-results-main-toolbar">
+                <button type="button" class="btn" id="btnExpDownloadCsv">下载 CSV</button>
+                <button type="button" class="btn" id="btnExpDownloadJpg">下载 JPG</button>
+              </div>
+              <div id="expResultsEmpty" class="muted" style="padding:24px 8px;">暂无已完成实验。请在「实验设计」中配置后点击「启动实验」。</div>
+              <div id="expResultsDetail" style="display:none;">
+                <h3 id="expResultsDetailTitle" style="margin:0 0 12px;">实验结果</h3>
+                <div id="expResultsCurveBlock" class="exp-results-four-charts">
+                  <div class="exp-chart-cell">
+                    <h4 class="exp-chart-caption">Prefill延时 (ms)</h4>
+                    <canvas class="chart chart--perf" id="expResultChart0" width="440" height="240"></canvas>
+                  </div>
+                  <div class="exp-chart-cell">
+                    <h4 class="exp-chart-caption">Decode速度 (tokens/s)</h4>
+                    <canvas class="chart chart--perf" id="expResultChart1" width="440" height="240"></canvas>
+                  </div>
+                </div>
+                <div id="expResultsHeatmapBlock" class="exp-results-four-heatmaps" style="display:none;margin-top:12px;">
+                  <div class="exp-chart-cell">
+                    <h4 class="exp-chart-caption">Prefill延时 (ms)</h4>
+                    <div class="exp-heatmap-wrap"><canvas id="expHeatmapPrefill" width="420" height="200"></canvas></div>
+                  </div>
+                  <div class="exp-chart-cell">
+                    <h4 class="exp-chart-caption">Decode速度 (tokens/s)</h4>
+                    <div class="exp-heatmap-wrap"><canvas id="expHeatmapDecodeTps" width="420" height="200"></canvas></div>
+                  </div>
+                </div>
+                <div id="expResultsBarBlock" class="exp-results-bar-block" style="display:none;margin-top:12px;">
+                  <div class="exp-chart-cell">
+                    <h4 class="exp-chart-caption">单星峰值显存占用（GB）</h4>
+                    <canvas class="chart chart--perf" id="expResultBarChart" width="720" height="300"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <pre id="resultBoxDebug" class="debug-json"></pre>
+        </section>
+
+        <div class="footer">SCSP 仿真平台 v0</div>
+      </main>
+    </div>
+
+    <script>
+      let MODEL_REGISTRY = {};
+
+      const MODEL_REGISTRY_BASELINE = JSON.parse(`{"Qwen2.5-VL-3B":{"model_params":"3B","structure":{"model_name":"Qwen2.5-VL-3B","model_type":"vlm","parameter_count":{"active_unit":3000000000,"resident_unit":3000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":36,"hidden_size":2560,"intermediate_size":9728,"num_attention_heads":20,"num_key_value_heads":4},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":2560}},"profiling":{"prefill_flops_gflops_per_patch":3623.7,"decode_flops_gflops_per_token":5.603,"prefill_memory_gb_per_patch":8.44,"prefill_peak_memory_breakdown_gb":{"weight_gb":5.2,"kv_cache_gb":1.2,"activation_peak_gb":1.74,"workspace_gb":0.3},"decode_memory_mb_per_token":6808,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":6.45,"kv_cache_read_gb_per_token":0.2,"kv_cache_write_gb_per_token":0.0001,"activation_and_intermediate_gb_per_token":0.1579},"inter_stage_transfer":{"prefill_mb":1.79,"decode_kb":5.72}}},"Qwen2.5-VL-7B":{"model_params":"7B","structure":{"model_name":"Qwen2.5-VL-7B","model_type":"vlm","parameter_count":{"active_unit":7000000000,"resident_unit":7000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":28,"hidden_size":3584,"intermediate_size":18944,"num_attention_heads":28,"num_key_value_heads":4},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":3584}},"profiling":{"prefill_flops_gflops_per_patch":6275,"decode_flops_gflops_per_token":13.124,"prefill_memory_gb_per_patch":16.57,"prefill_peak_memory_breakdown_gb":{"weight_gb":11,"kv_cache_gb":2.2,"activation_peak_gb":2.77,"workspace_gb":0.6},"decode_memory_mb_per_token":15252,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":14.85,"kv_cache_read_gb_per_token":0.15,"kv_cache_write_gb_per_token":0.0001,"activation_and_intermediate_gb_per_token":0.2519},"inter_stage_transfer":{"prefill_mb":2.5,"decode_kb":7.17}}},"Qwen2.5-VL-32B":{"model_params":"32B","structure":{"model_name":"Qwen2.5-VL-32B","model_type":"vlm","parameter_count":{"active_unit":32000000000,"resident_unit":32000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":64,"hidden_size":5120,"intermediate_size":27648,"num_attention_heads":40,"num_key_value_heads":8},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":5120}},"profiling":{"prefill_flops_gflops_per_patch":23729.2,"decode_flops_gflops_per_token":62.6511,"prefill_memory_gb_per_patch":67.77,"prefill_peak_memory_breakdown_gb":{"weight_gb":64.98,"kv_cache_gb":0.09,"activation_peak_gb":1.61,"workspace_gb":1.08},"decode_memory_mb_per_token":67199,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":65.528,"kv_cache_read_gb_per_token":0.0954,"kv_cache_write_gb_per_token":0.000262,"activation_and_intermediate_gb_per_token":4.1e-05},"inter_stage_transfer":{"prefill_mb":3.57,"decode_kb":10.24}}}}`);
+
+      const state = {
+        config: {
+          model_name: "Qwen2.5-VL-7B",
+          model_params: "7B",
+          active_model_params: "7B",
+          model_structure: {},
+          model_profiling: {},
+          dp: 1,
+          tp: 2,
+          pp: 1,
+          mixed_precision: true,
+          image_type: "RGB",
+          image_resolution: "512x512",
+          decode_tokens: 1,
+          tile_size: "512x512",
+          link_bandwidth_gbps_single: 400,
+          link_bandwidth_gbps_sweep: [10, 50, 100, 200, 400],
+          link_bandwidth_gbps: [10, 50, 100, 200, 400],
+          prefill_inter_stage_transfer_mb: 2.5,
+          decode_inter_stage_transfer_kb: 7.17,
+          flops_per_sample: 5e13,
+          prefill_memory_bytes_per_patch: 5e10,
+          decode_flops_per_token: 1.435e11,
+          decode_memory_bytes_per_token: 1.0e8,
+          peak_vram_gb: 120,
+          num_images: 1,
+          big_star_peak_pflops_single: 10.0,
+          big_star_peak_pflops_sweep: [6, 8, 10, 12, 14],
+          big_star_peak_pflops: 10.0,
+          single_star_compute_utilization: 0.5,
+          prefill_compute_utilization: 0.5,
+          prefill_memory_utilization: 0.7,
+          decode_compute_utilization: 0.2,
+          decode_memory_utilization: 0.7,
+          single_node_memory_bandwidth_bytes_per_sec: 2.0e13,
+          local_mem_bw_gbps: 3350,
+          single_star_compute_payload_power_w: 20000.0,
+          inter_sat_latency_target_ms: 1.0,
+          peak_power_limit_kw: 20.0,
+          stage_split_ratio: 0.5,
+          fixed_sync_overhead_ms: 5.0,
+          inter_sat_distance_km: 10,
+          remote_sat_altitude_km: 535,
+          compute_sat_altitude_km: 500,
+          compute_sat_count: 2,
+          link_mode_compute_inter: "同轨稳定链路",
+          link_mode_remote_compute: "异轨条件链路",
+          link_mode: "异轨条件链路"
+        },
+        sweepRows: [],
+        bandwidthSensitivityRows: [],
+        computeSensitivityRows: [],
+        /** 单点仿真（标称带宽+标称算力）结果，用于概览 KPI 与时延分解 */
+        kpiOverviewRow: null,
+        lastResult: null,
+        /** 概览页仿真结果仅在 sweep 成功展示后才显示 */
+        overviewResultsDisplayed: false,
+        experiment: {
+          selectedTemplate: "bandwidth_sweep",
+          designDraft: {
+            model: "Qwen2.5-VL-7B",
+            formation: "紧密",
+            pflops: 10,
+            bw: 400,
+            scan: "10,50,100,200,400"
+          },
+          /** 启动实验完成后追加，供「实验设计/实验结果」列表与图表使用 */
+          completedRuns: [],
+          selectedResultId: null,
+          runExperimentBusy: false,
+          designFormInitialized: false,
+          shouldHydrateMirror: false,
+          /** 为 true 后才在 renderAll 开头把镜像区写回主 cfg，避免首次进入页面前 x_* 为空覆盖配置 */
+          mirrorDomReady: false,
+          templatesBound: false
+        }
+      };
+
+      const mockRows = [
+        { link_bandwidth_gbps: 10, total_latency_s: 167.21, effective_compute_pflops: 5.1, data_tx_latency_s: 29.53, inter_stage_latency_s: 18.8, stage1_compute_latency_s: 62.14, stage2_compute_latency_s: 57.54, compute_utilization: 0.51 },
+        { link_bandwidth_gbps: 50, total_latency_s: 132.45, effective_compute_pflops: 6.8, data_tx_latency_s: 19.53, inter_stage_latency_s: 14.2, stage1_compute_latency_s: 56.14, stage2_compute_latency_s: 42.58, compute_utilization: 0.68 },
+        { link_bandwidth_gbps: 100, total_latency_s: 124.53, effective_compute_pflops: 8.1, data_tx_latency_s: 14.53, inter_stage_latency_s: 9.17, stage1_compute_latency_s: 62.14, stage2_compute_latency_s: 27.86, compute_utilization: 0.812 },
+        { link_bandwidth_gbps: 200, total_latency_s: 118.92, effective_compute_pflops: 8.45, data_tx_latency_s: 11.12, inter_stage_latency_s: 7.8, stage1_compute_latency_s: 61.21, stage2_compute_latency_s: 26.79, compute_utilization: 0.845 },
+        { link_bandwidth_gbps: 400, total_latency_s: 116.77, effective_compute_pflops: 8.6, data_tx_latency_s: 9.64, inter_stage_latency_s: 6.6, stage1_compute_latency_s: 60.44, stage2_compute_latency_s: 25.23, compute_utilization: 0.86 }
+      ];
+
+      /** 实验设计页「其他参数」与主表单 cfg* 镜像（不含模型结构/参数量、不含任何扫描列表；标称模型/算力/带宽由核心区同步） */
+      const EXPERIMENT_MIRROR_FIELD_IDS = [
+        "cfgRemoteAlt", "cfgComputeAlt", "cfgComputeCount", "cfgInterSatDistance",
+        "cfgImageResolution", "cfgTileSize", "cfgDecodeTokens",
+        "cfgPrefillComputeUtil", "cfgPrefillMemoryUtil", "cfgDecodeComputeUtil", "cfgDecodeMemoryUtil",
+        "cfgMemoryBandwidthTBps", "cfgLocalMemBwGbps", "cfgPowerLimit", "cfgVram",
+        "cfgLinkModeComputeInter", "cfgLinkModeRemoteCompute"
+      ];
+
+      function pushMirrorAndExpCoreToMainDom() {
+        const expM = byId("expCfgModel");
+        const cM = byId("cfgModelName");
+        if (expM && cM) cM.value = expM.value;
+        const expPf = byId("expCfgPflops");
+        const cPf = byId("cfgPeakPflopsSingle");
+        if (expPf && cPf) cPf.value = expPf.value;
+        const expBw = byId("expCfgBw");
+        const cBw = byId("cfgBandwidthSingle");
+        if (expBw && cBw) cBw.value = expBw.value;
+        EXPERIMENT_MIRROR_FIELD_IDS.forEach((cfgId) => {
+          if (state.experiment.selectedTemplate === "inter_sat_distance" && cfgId === "cfgInterSatDistance") {
+            return;
+          }
+          const xel = byId(`x_${cfgId}`);
+          const cel = byId(cfgId);
+          if (xel && cel) cel.value = xel.value;
+        });
+      }
+
+      function copyMainCfgToMirrorInputs() {
+        EXPERIMENT_MIRROR_FIELD_IDS.forEach((cfgId) => {
+          if (state.experiment.selectedTemplate === "inter_sat_distance" && cfgId === "cfgInterSatDistance") {
+            return;
+          }
+          const xel = byId(`x_${cfgId}`);
+          const cel = byId(cfgId);
+          if (xel && cel) xel.value = cel.value;
+        });
+      }
+
+      function renderExperimentMirrorFromState() {
+        renderConfigInputs();
+        copyMainCfgToMirrorInputs();
+      }
+
+      const byId = (id) => document.getElementById(id);
+      const toPrettyJson = (obj) => JSON.stringify(obj || {}, null, 2);
+      const toBText = (count) => {
+        const n = Number(count || 0);
+        if (!Number.isFinite(n) || n <= 0) return "";
+        return `${(n / 1e9).toFixed(1).replace(/\.0$/, "")}B`;
+      };
+      const parseBTextToCount = (text, fallback) => {
+        const m = String(text || "").match(/(\d+(?:\.\d+)?)/);
+        return m ? Number(m[1]) * 1e9 : fallback;
+      };
+      function syncModelStructureVisibility() {
+        const modelType = String(byId("cfgModelType")?.value || "vlm").toLowerCase();
+        const visionCard = byId("visionStructCard");
+        if (visionCard) visionCard.style.display = modelType === "llm" ? "none" : "";
+      }
+
+      /** 与 applyRegistryModel 一致：breakdown 之和（GB）×1000 为 MB 标度，否则用 decode_memory_mb_per_token */
+      function decodeMemoryMbFromProfiling(profiling) {
+        const p = profiling || {};
+        const decodeBreakdown = p.decode_memory_breakdown_gb || null;
+        if (decodeBreakdown) {
+          return (
+            Number(decodeBreakdown.weight_read_gb_per_token || 0) +
+            Number(decodeBreakdown.kv_cache_read_gb_per_token || 0) +
+            Number(decodeBreakdown.kv_cache_write_gb_per_token || 0) +
+            Number(decodeBreakdown.activation_and_intermediate_gb_per_token || 0)
+          ) * 1e3;
+        }
+        return Number(p.decode_memory_mb_per_token || 100);
+      }
+
+      const REGISTRY_FALLBACK_LLMS = {
+        num_hidden_layers: 80,
+        hidden_size: 8192,
+        intermediate_size: 29568,
+        num_attention_heads: 64,
+        num_key_value_heads: 8
+      };
+      const REGISTRY_FALLBACK_VISION = {
+        depth: 32,
+        hidden_size: 1280,
+        patch_size: 14,
+        spatial_merge_size: 2,
+        out_hidden_size: 8192
+      };
+
+      /** 从 MODEL_REGISTRY 取与 configs/model_registry.json 一致的表单项回退值（空输入时用） */
+      function registryInputFallbacks(modelName) {
+        let preset = MODEL_REGISTRY[modelName];
+        if (!preset) preset = MODEL_REGISTRY["Qwen2.5-VL-7B"];
+        if (!preset) {
+          return {
+            modelParamsText: "7B",
+            residentUnit: 7e9,
+            activeUnit: 7e9,
+            llm: { ...REGISTRY_FALLBACK_LLMS },
+            vision: { ...REGISTRY_FALLBACK_VISION },
+            prefillFlops: 6275,
+            prefillMemGb: 16.57,
+            decodeFlops: 13.124,
+            decodeMemGb: 15.252,
+            prefillInterStageMb: 2.5,
+            decodeInterStageKb: 7.17
+          };
+        }
+        const structure = preset.structure || {};
+        const pc = structure.parameter_count || {};
+        const profiling = preset.profiling || {};
+        const llm = structure.llm || REGISTRY_FALLBACK_LLMS;
+        const vision = structure.vision || {
+          ...REGISTRY_FALLBACK_VISION,
+          out_hidden_size: llm.hidden_size
+        };
+        const ist = profiling.inter_stage_transfer || {};
+        return {
+          modelParamsText: preset.model_params || toBText(Number(pc.resident_unit || 0)) || "7B",
+          residentUnit: Number(pc.resident_unit || pc.unit || 7e9),
+          activeUnit: Number(pc.active_unit || pc.resident_unit || pc.unit || 7e9),
+          llm: {
+            num_hidden_layers: llm.num_hidden_layers,
+            hidden_size: llm.hidden_size,
+            intermediate_size: llm.intermediate_size,
+            num_attention_heads: llm.num_attention_heads,
+            num_key_value_heads: llm.num_key_value_heads
+          },
+          vision: {
+            depth: vision.depth,
+            hidden_size: vision.hidden_size,
+            patch_size: vision.patch_size,
+            spatial_merge_size: vision.spatial_merge_size,
+            out_hidden_size: vision.out_hidden_size != null ? vision.out_hidden_size : llm.hidden_size
+          },
+          prefillFlops: Number(profiling.prefill_flops_gflops_per_patch || 6275),
+          prefillMemGb: Number(profiling.prefill_memory_gb_per_patch || 16.57),
+          decodeFlops: Number(profiling.decode_flops_gflops_per_token || 13.124),
+          decodeMemGb: decodeMemoryMbFromProfiling(profiling) / 1000,
+          prefillInterStageMb: Number(ist.prefill_mb ?? 2.5),
+          decodeInterStageKb: Number(ist.decode_kb ?? 7.17)
+        };
+      }
+
+      async function loadModelRegistry() {
+        const baselineClone = JSON.parse(JSON.stringify(MODEL_REGISTRY_BASELINE));
+        try {
+          const resp = await fetch("/configs/model_registry.json", { cache: "no-store" });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const payload = await resp.json();
+          if (payload && typeof payload === "object") {
+            /* 同名模型以内嵌基线为准，避免服务端/浏览器缓存仍返回旧 profiling（如 2083.3）覆盖已更新的基线 */
+            MODEL_REGISTRY = { ...payload, ...baselineClone };
+          } else {
+            MODEL_REGISTRY = baselineClone;
+          }
+        } catch {
+          MODEL_REGISTRY = baselineClone;
+        }
+      }
+
+      function applyRegistryModel(modelName) {
+        const preset = MODEL_REGISTRY[modelName];
+        if (!preset) return;
+        const profiling = preset.profiling || {};
+        const decodeMemoryMbFromBreakdown = decodeMemoryMbFromProfiling(profiling);
+        state.config.model_name = modelName;
+        state.config.model_structure = JSON.parse(JSON.stringify(preset.structure));
+        const parameterCount = (preset.structure && preset.structure.parameter_count) || {};
+        const residentCount = Number(parameterCount.resident_unit || parameterCount.unit || 0);
+        const activeCount = Number(parameterCount.active_unit || residentCount || 0);
+        state.config.model_params = preset.model_params || toBText(residentCount) || "7B";
+        state.config.active_model_params = toBText(activeCount) || state.config.model_params;
+        state.config.model_profiling = JSON.parse(JSON.stringify(profiling));
+        state.config.flops_per_sample = Number(profiling.prefill_flops_gflops_per_patch || 6275) * 1e9;
+        state.config.decode_flops_per_token = Number(profiling.decode_flops_gflops_per_token || 13.124) * 1e9;
+        state.config.prefill_memory_bytes_per_patch = Number(profiling.prefill_memory_gb_per_patch || 16.57) * 1e9;
+        state.config.decode_memory_bytes_per_token = decodeMemoryMbFromBreakdown * 1e6;
+        const ist = profiling.inter_stage_transfer || {};
+        if (ist.prefill_mb != null) {
+          state.config.prefill_inter_stage_transfer_mb = Number(ist.prefill_mb);
+        }
+        if (ist.decode_kb != null) {
+          state.config.decode_inter_stage_transfer_kb = Number(ist.decode_kb);
+        }
+      }
+
+      async function apiGet(url) {
+        const r = await fetch(url);
+        return r.json();
+      }
+      async function apiPost(url, payload) {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        return r.json();
+      }
+
+      function metricsResponseToKpiRow(apiResult, linkBw, pflops) {
+        const m = apiResult && apiResult.metrics;
+        if (!m || !Number.isFinite(Number(m.total_latency_s))) return null;
+        const unsupported = new Set(Array.isArray(apiResult.unsupported_fields) ? apiResult.unsupported_fields : []);
+        const metricValue = (key) => unsupported.has(key) ? null : Number(m[key]);
+        const metricText = (key) => unsupported.has(key) ? "—" : String(m[key] || "");
+        return {
+          total_samples: Number(m.total_samples),
+          link_bandwidth_gbps: linkBw,
+          single_star_pflops: pflops,
+          total_latency_s: Number(m.total_latency_s),
+          effective_compute_pflops: Number(m.effective_compute_pflops),
+          data_tx_latency_s: metricValue("data_tx_latency_s"),
+          inter_stage_latency_s: metricValue("inter_stage_latency_s"),
+          stage1_compute_latency_s: metricValue("stage1_compute_latency_s"),
+          stage2_compute_latency_s: metricValue("stage2_compute_latency_s"),
+          compute_utilization: Number(m.compute_utilization),
+          prefill_compute_time_s: metricValue("prefill_compute_time_s"),
+          prefill_memory_time_s: metricValue("prefill_memory_time_s"),
+          prefill_time_s: metricValue("prefill_time_s"),
+          prefill_bottleneck: metricText("prefill_bottleneck"),
+          prefill_peak_memory_gb: metricValue("prefill_peak_memory_gb"),
+          single_star_peak_memory_gb: unsupported.has("single_star_peak_memory_gb") ? null : Number(m.single_star_peak_memory_gb ?? m.prefill_peak_memory_gb),
+          decode_latency_s_per_token: metricValue("decode_latency_s_per_token"),
+          decode_total_latency_s: metricValue("decode_total_latency_s"),
+          decode_compute_latency_s_per_token: metricValue("decode_compute_latency_s_per_token"),
+          decode_memory_latency_s_per_token: metricValue("decode_memory_latency_s_per_token"),
+          decode_effective_compute_pflops: metricValue("decode_effective_compute_pflops"),
+          decode_bottleneck: metricText("decode_bottleneck"),
+          decode_energy_efficiency_tokens_per_j: metricValue("decode_energy_efficiency_tokens_per_j"),
+          total_inference_time_s: metricValue("total_inference_time_s"),
+          unsupported_fields: unsupported
+        };
+      }
+
+      function renderConfigInputs() {
+        byId("cfgRemoteAlt").value = state.config.remote_sat_altitude_km;
+        byId("cfgComputeAlt").value = state.config.compute_sat_altitude_km;
+        byId("cfgComputeCount").value = state.config.compute_sat_count;
+        byId("cfgInterSatDistance").value = state.config.inter_sat_distance_km;
+        byId("cfgModelName").value = state.config.model_name;
+        byId("cfgModelParams").value = state.config.model_params || "";
+        byId("cfgActiveModelParams").value = state.config.active_model_params || state.config.model_params || "";
+        byId("cfgDp").value = Number(state.config.dp || 1);
+        byId("cfgTp").value = Number(state.config.tp || 1);
+        byId("cfgPp").value = Number(state.config.pp || 1);
+        byId("cfgMixedPrecision").checked = Boolean(state.config.mixed_precision);
+        const structure = state.config.model_structure || {};
+        const llm = structure.llm || {};
+        const vision = structure.vision || {};
+        const parameterCount = structure.parameter_count || {};
+        byId("cfgModelType").value = String(structure.model_type || "vlm").toLowerCase();
+        byId("cfgStructureType").value = String(parameterCount.dense_or_moe || "dense").toLowerCase();
+        byId("cfgLlmNumHiddenLayers").value = llm.num_hidden_layers ?? "";
+        byId("cfgLlmHiddenSize").value = llm.hidden_size ?? "";
+        byId("cfgLlmIntermediateSize").value = llm.intermediate_size ?? "";
+        byId("cfgLlmAttentionHeads").value = llm.num_attention_heads ?? "";
+        byId("cfgLlmKvHeads").value = llm.num_key_value_heads ?? "";
+        byId("cfgVisionDepth").value = vision.depth ?? "";
+        byId("cfgVisionHiddenSize").value = vision.hidden_size ?? "";
+        byId("cfgVisionPatchSize").value = vision.patch_size ?? "";
+        byId("cfgVisionSpatialMerge").value = vision.spatial_merge_size ?? "";
+        byId("cfgVisionOutHiddenSize").value = vision.out_hidden_size ?? "";
+        byId("cfgStageSplit").value = state.config.stage_split_ratio;
+        byId("cfgFlops").value = Number(state.config.flops_per_sample || 0) / 1e9;
+        byId("cfgPrefillMemoryGB").value = Number(state.config.prefill_memory_bytes_per_patch || 0) / 1e9;
+        byId("cfgDecodeFlopsPerToken").value = Number(state.config.decode_flops_per_token || 0) / 1e9;
+        byId("cfgDecodeMemoryGB").value = Number(state.config.decode_memory_bytes_per_token || 0) / 1e9;
+        byId("cfgPrefillInterStageTransfer").value = state.config.prefill_inter_stage_transfer_mb;
+        byId("cfgDecodeInterStageTransfer").value = state.config.decode_inter_stage_transfer_kb;
+        byId("cfgImageResolution").value = state.config.image_resolution;
+        byId("cfgTileSize").value = state.config.tile_size;
+        byId("cfgDecodeTokens").value = Number(state.config.decode_tokens ?? 1);
+        byId("cfgPeakPflopsSingle").value = state.config.big_star_peak_pflops_single;
+        byId("cfgPeakPflopsSweep").value = (state.config.big_star_peak_pflops_sweep || []).join(",");
+        byId("cfgPrefillComputeUtil").value = state.config.prefill_compute_utilization;
+        byId("cfgPrefillMemoryUtil").value = state.config.prefill_memory_utilization;
+        byId("cfgDecodeComputeUtil").value = state.config.decode_compute_utilization;
+        byId("cfgDecodeMemoryUtil").value = state.config.decode_memory_utilization;
+        byId("cfgMemoryBandwidthTBps").value = Number(state.config.single_node_memory_bandwidth_bytes_per_sec || 0) / 1e12;
+        byId("cfgLocalMemBwGbps").value = Number(state.config.local_mem_bw_gbps || 3350);
+        byId("cfgPowerLimit").value = state.config.single_star_compute_payload_power_w / 1000;
+        byId("cfgVram").value = state.config.peak_vram_gb;
+        byId("cfgBandwidthSingle").value = state.config.link_bandwidth_gbps_single;
+        byId("cfgBandwidthSweep").value = (state.config.link_bandwidth_gbps_sweep || state.config.link_bandwidth_gbps || []).join(",");
+        byId("cfgLinkModeComputeInter").value = state.config.link_mode_compute_inter || "同轨稳定链路";
+        byId("cfgLinkModeRemoteCompute").value = state.config.link_mode_remote_compute || state.config.link_mode || "异轨条件链路";
+        syncModelStructureVisibility();
+      }
+
+      function readConfigFromInputs() {
+        const parseNum = (id, fallback) => {
+          const raw = String(byId(id).value ?? "").trim();
+          if (raw === "") return fallback;
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : fallback;
+        };
+        const parseIntMaybe = (id, fallback) => {
+          const raw = String(byId(id).value ?? "").trim();
+          if (raw === "") return fallback;
+          const n = Number(raw);
+          return Number.isFinite(n) ? Math.round(n) : fallback;
+        };
+        const modelNameForRegistry =
+          byId("cfgModelName").value.trim() || state.config.model_name || "Qwen2.5-VL-7B";
+        const rf = registryInputFallbacks(modelNameForRegistry);
+        state.config.remote_sat_altitude_km = parseNum("cfgRemoteAlt", 535);
+        state.config.compute_sat_altitude_km = parseNum("cfgComputeAlt", 500);
+        state.config.compute_sat_count = Math.max(1, Math.min(4, Math.round(parseNum("cfgComputeCount", 1))));
+        byId("cfgComputeCount").value = String(state.config.compute_sat_count);
+        const expDesignActive = byId("page-experiment-design")?.classList.contains("active");
+        const skipInterSatFromDom =
+          expDesignActive && state.experiment.selectedTemplate === "inter_sat_distance";
+        if (!skipInterSatFromDom) {
+          state.config.inter_sat_distance_km = parseNum("cfgInterSatDistance", 10);
+        }
+        state.config.model_name = byId("cfgModelName").value.trim() || "Qwen2.5-VL-7B";
+        state.config.model_params = byId("cfgModelParams").value.trim() || rf.modelParamsText || "7B";
+        state.config.active_model_params =
+          byId("cfgActiveModelParams").value.trim() || state.config.model_params;
+        state.config.dp = Math.max(1, parseIntMaybe("cfgDp", 1));
+        state.config.tp = Math.max(1, parseIntMaybe("cfgTp", 1));
+        state.config.pp = Math.max(1, parseIntMaybe("cfgPp", 1));
+        state.config.mixed_precision = Boolean(byId("cfgMixedPrecision").checked);
+        const modelType = String(byId("cfgModelType").value || "vlm").toLowerCase();
+        const structureType = String(byId("cfgStructureType").value || "dense").toLowerCase();
+        const llm = {
+          num_hidden_layers: parseIntMaybe("cfgLlmNumHiddenLayers", rf.llm.num_hidden_layers),
+          hidden_size: parseIntMaybe("cfgLlmHiddenSize", rf.llm.hidden_size),
+          intermediate_size: parseIntMaybe("cfgLlmIntermediateSize", rf.llm.intermediate_size),
+          num_attention_heads: parseIntMaybe("cfgLlmAttentionHeads", rf.llm.num_attention_heads),
+          num_key_value_heads: parseIntMaybe("cfgLlmKvHeads", rf.llm.num_key_value_heads)
+        };
+        const residentUnit = parseBTextToCount(state.config.model_params, rf.residentUnit);
+        const activeUnit = parseBTextToCount(state.config.active_model_params, rf.activeUnit);
+        const structure = {
+          model_name: state.config.model_name,
+          model_type: modelType,
+          parameter_count: {
+            resident_unit: residentUnit,
+            active_unit: activeUnit,
+            dense_or_moe: structureType
+          },
+          llm
+        };
+        if (modelType !== "llm") {
+          structure.vision = {
+            depth: parseIntMaybe("cfgVisionDepth", rf.vision.depth),
+            hidden_size: parseIntMaybe("cfgVisionHiddenSize", rf.vision.hidden_size),
+            patch_size: parseIntMaybe("cfgVisionPatchSize", rf.vision.patch_size),
+            spatial_merge_size: parseIntMaybe("cfgVisionSpatialMerge", rf.vision.spatial_merge_size),
+            out_hidden_size: parseIntMaybe(
+              "cfgVisionOutHiddenSize",
+              rf.vision.out_hidden_size != null ? rf.vision.out_hidden_size : llm.hidden_size
+            )
+          };
+        }
+        state.config.model_structure = structure;
+        state.config.stage_split_ratio = parseNum("cfgStageSplit", 0.5);
+        state.config.flops_per_sample = parseNum("cfgFlops", rf.prefillFlops) * 1e9;
+        state.config.prefill_memory_bytes_per_patch = parseNum("cfgPrefillMemoryGB", rf.prefillMemGb) * 1e9;
+        state.config.decode_flops_per_token = parseNum("cfgDecodeFlopsPerToken", rf.decodeFlops) * 1e9;
+        state.config.decode_memory_bytes_per_token = parseNum("cfgDecodeMemoryGB", rf.decodeMemGb) * 1e9;
+        state.config.prefill_inter_stage_transfer_mb = parseNum(
+          "cfgPrefillInterStageTransfer",
+          rf.prefillInterStageMb
+        );
+        state.config.decode_inter_stage_transfer_kb = parseNum(
+          "cfgDecodeInterStageTransfer",
+          rf.decodeInterStageKb
+        );
+        state.config.image_resolution = byId("cfgImageResolution").value.trim() || "512x512";
+        state.config.tile_size = byId("cfgTileSize").value.trim() || "512x512";
+        state.config.decode_tokens = Math.max(
+          1,
+          Math.round(parseNum("cfgDecodeTokens", Number(state.config.decode_tokens) || 1))
+        );
+        state.config.big_star_peak_pflops_single = parseNum("cfgPeakPflopsSingle", 10.0);
+        const sweepP = byId("cfgPeakPflopsSweep").value.split(",").map((s) => Number(String(s).trim())).filter((n) => Number.isFinite(n) && n > 0);
+        state.config.big_star_peak_pflops_sweep = sweepP.length ? sweepP : [6, 8, 10, 12, 14];
+        state.config.big_star_peak_pflops = state.config.big_star_peak_pflops_single;
+        state.config.prefill_compute_utilization = parseNum("cfgPrefillComputeUtil", 0.5);
+        state.config.prefill_memory_utilization = parseNum("cfgPrefillMemoryUtil", 0.7);
+        state.config.decode_compute_utilization = parseNum("cfgDecodeComputeUtil", 0.2);
+        state.config.decode_memory_utilization = parseNum("cfgDecodeMemoryUtil", 0.7);
+        // 向后兼容：保留旧字段镜像 prefill 计算利用率。
+        state.config.single_star_compute_utilization = state.config.prefill_compute_utilization;
+        state.config.single_node_memory_bandwidth_bytes_per_sec = parseNum("cfgMemoryBandwidthTBps", 20) * 1e12;
+        state.config.local_mem_bw_gbps = parseNum("cfgLocalMemBwGbps", 3350);
+        state.config.single_star_compute_payload_power_w = parseNum("cfgPowerLimit", 20) * 1000;
+        state.config.peak_power_limit_kw = state.config.single_star_compute_payload_power_w / 1000.0;
+        state.config.peak_vram_gb = parseNum("cfgVram", 120);
+        state.config.link_mode_compute_inter = byId("cfgLinkModeComputeInter").value.trim() || "同轨稳定链路";
+        state.config.link_mode_remote_compute = byId("cfgLinkModeRemoteCompute").value.trim() || "异轨条件链路";
+        // 与现有后端字段兼容：沿用遥感-计算星链路模式作为仿真主链路模式。
+        state.config.link_mode = state.config.link_mode_remote_compute;
+        state.config.link_bandwidth_gbps_single = Math.max(1, Math.round(parseNum("cfgBandwidthSingle", 400)));
+        const sweepBw = byId("cfgBandwidthSweep").value.split(",").map((s) => Math.round(Number(String(s).trim()))).filter((n) => Number.isFinite(n) && n > 0);
+        state.config.link_bandwidth_gbps_sweep = sweepBw.length ? sweepBw : [10, 50, 100, 200, 400];
+        state.config.link_bandwidth_gbps = [...state.config.link_bandwidth_gbps_sweep];
+      }
+
+      function getInterSatDistanceFromConstellationConfig() {
+        const pageExp = byId("page-experiment-design")?.classList.contains("active");
+        if (pageExp && state.experiment.selectedTemplate === "inter_sat_distance") {
+          return Number(state.config.inter_sat_distance_km || 10);
+        }
+        const el =
+          pageExp && byId("x_cfgInterSatDistance") ? byId("x_cfgInterSatDistance") : byId("cfgInterSatDistance");
+        const current = Number(el && el.value);
+        if (Number.isFinite(current) && current > 0) {
+          state.config.inter_sat_distance_km = current;
+          return current;
+        }
+        return Number(state.config.inter_sat_distance_km || 10);
+      }
+
+      function renderScene() {
+        const scene = byId("scene");
+        scene.innerHTML = "";
+        const interSatDistanceKm = getInterSatDistanceFromConstellationConfig();
+        const centerX = Math.max(140, Math.round(scene.clientWidth / 2));
+        const computeCount = Math.max(1, Math.min(4, Math.round(Number(state.config.compute_sat_count || 2))));
+        const remoteAlt = Number(state.config.remote_sat_altitude_km || 535);
+        const computeAlt = Number(state.config.compute_sat_altitude_km || 500);
+        const altMin = Math.min(remoteAlt, computeAlt);
+        const altMax = Math.max(remoteAlt, computeAlt);
+        const altSpan = Math.max(altMax - altMin, 1);
+        const yByAlt = (alt, yTop, yBottom) => yBottom - ((alt - altMin) / altSpan) * (yBottom - yTop);
+        const sceneYTop = 70;
+        const sceneYBottom = 138;
+        const rs = { x: centerX, y: yByAlt(remoteAlt, sceneYTop, sceneYBottom), type: "remote", label: `遥感星<br/>${state.config.remote_sat_altitude_km} km` };
+        const spanMap = { 1: 0, 2: 180, 3: 220, 4: 264 };
+        const span = spanMap[computeCount] || 180;
+        const startX = centerX - span / 2;
+        const step = computeCount > 1 ? span / (computeCount - 1) : 0;
+        const computeNodes = Array.from({ length: computeCount }, (_, idx) => ({
+          x: Math.round(startX + step * idx),
+          y: yByAlt(computeAlt, sceneYTop, sceneYBottom),
+          type: "compute",
+          label: `计算星${idx + 1}<br/>${state.config.compute_sat_altitude_km} km`,
+          labelDx: computeCount > 2 ? (idx - (computeCount - 1) / 2) * 6 : 0,
+          labelDy: 0
+        }));
+        [rs, ...computeNodes].forEach((n) => {
+          const sat = document.createElement("div");
+          sat.className = `sat sat--${n.type}`;
+          sat.style.left = `${n.x}px`;
+          sat.style.top = `${n.y}px`;
+          scene.appendChild(sat);
+          const lb = document.createElement("div");
+          lb.className = "sat-label";
+          const dx = Number(n.labelDx || 0);
+          const dy = Number(n.labelDy || 0);
+          const sceneH = Math.max(1, scene.clientHeight || 194);
+          const labelTop = n.y + 18 + dy;
+          const labelTopClamped = Math.min(Math.max(labelTop, 8), sceneH - 36);
+          lb.style.left = `${n.x - 20 + dx}px`;
+          lb.style.top = `${labelTopClamped}px`;
+          lb.innerHTML = n.label;
+          scene.appendChild(lb);
+        });
+        const dist = document.createElement("div");
+        dist.className = "sat-label";
+        dist.style.left = `${centerX - 68}px`;
+        const minSceneNodeY = Math.min(rs.y, ...computeNodes.map((n) => n.y));
+        dist.style.top = `${Math.max(16, Math.round(minSceneNodeY - 30))}px`;
+        dist.textContent = `星间距（星座构型配置）：${interSatDistanceKm} km`;
+        scene.appendChild(dist);
+        const drawLine = (a, b, cls) => {
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const len = Math.hypot(dx, dy);
+          const line = document.createElement("div");
+          line.className = `line ${cls || ""}`;
+          line.style.left = `${a.x}px`;
+          line.style.top = `${a.y}px`;
+          line.style.width = `${Math.max(len, 0)}px`;
+          line.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+          scene.appendChild(line);
+        };
+        computeNodes.forEach((node) => drawLine(rs, node, ""));
+        for (let i = 0; i < computeNodes.length - 1; i++) {
+          drawLine(computeNodes[i], computeNodes[i + 1], "l2");
+        }
+      }
+
+      function renderConfigSummary() {
+        const prefillFlops = Number(state.config.flops_per_sample || 0);
+        const prefillMemoryGB = Number(state.config.prefill_memory_bytes_per_patch || 0) / 1e9;
+        const decodeFlopsPerToken = Number(state.config.decode_flops_per_token || 1.435e11);
+        const decodeMemoryGB = Number(state.config.decode_memory_bytes_per_token || 1.0e8) / 1e9;
+        const prefillGflopsPerPatch = prefillFlops / 1e9;
+        const decodeGflopsPerToken = decodeFlopsPerToken / 1e9;
+        const modelParamMatch = String(state.config.model_name || "").match(/(\d+(?:\.\d+)?)\s*B/i);
+        const modelParams = state.config.model_params || (modelParamMatch ? `${modelParamMatch[1]}B` : "未标注");
+        const activeModelParams = state.config.active_model_params || modelParams;
+        const structure = state.config.model_structure || {};
+        const llm = structure.llm || {};
+        const vision = structure.vision || {};
+        const memoryBandwidthTBps = Number(state.config.single_node_memory_bandwidth_bytes_per_sec || 0) / 1e12;
+        const rows = [
+          ["星座构型配置", `遥感星轨道高度：${state.config.remote_sat_altitude_km} km<br/>计算星轨道高度：${state.config.compute_sat_altitude_km} km<br/>计算星数量：${state.config.compute_sat_count}<br/>计算星间距：${state.config.inter_sat_distance_km} km`],
+          ["模型部署配置", `模型名称：${state.config.model_name}<br/>模型参数量（驻留）：${modelParams}<br/>激活参数量：${activeModelParams}<br/>结构摘要：LLM层数 ${llm.num_hidden_layers ?? "-"} / 视觉层数 ${vision.depth ?? "-"}<br/>预填充计算量：${prefillGflopsPerPatch.toFixed(1)} GFLOPs/patch<br/>预填充访存量：${prefillMemoryGB.toFixed(3)} GB/patch<br/>解码计算量：${decodeGflopsPerToken.toFixed(1)} GFLOPs/token<br/>解码访存量：${decodeMemoryGB.toFixed(4)} GB/token<br/>Prefill 中间传输量：${state.config.prefill_inter_stage_transfer_mb} MB<br/>Decode 中间传输量：${state.config.decode_inter_stage_transfer_kb} KB`],
+          ["算力节点配置", `单星峰值算力：${state.config.big_star_peak_pflops_single} PFLOPS<br/>单星显存带宽：${memoryBandwidthTBps.toFixed(2)} TB/s<br/>扫描算力列表：${(state.config.big_star_peak_pflops_sweep || []).join("、")} PFLOPS`],
+          ["通信链路配置", `星间互联带宽：${state.config.link_bandwidth_gbps_single} Gbps<br/>计算星间链路模式：${state.config.link_mode_compute_inter}<br/>遥感-计算星间链路模式：${state.config.link_mode_remote_compute}`],
+          ["天基应用配置", `整景尺寸：${state.config.image_resolution}<br/>切块大小：${state.config.tile_size}<br/>Decode tokens：${state.config.decode_tokens ?? 1}`]
+        ];
+        byId("configSummary").innerHTML = rows.map(([t, v]) => `
+          <div class="summary-block">
+            <div class="t">${t}</div>
+            <div class="v">${v}</div>
+          </div>
+        `).join("");
+      }
+
+      function renderConstellationTopology() {
+        const container = byId("constTopologyMap");
+        if (!container) return;
+        container.innerHTML = "";
+        const interSatDistanceKm = getInterSatDistanceFromConstellationConfig();
+        const centerX = Math.round(container.clientWidth / 2);
+        const topoScale = Math.max(0.9, (container.clientHeight || 320) / 214);
+        const topoYOffset = -10;
+        const computeCount = Math.max(1, Math.min(4, Math.round(Number(state.config.compute_sat_count || 2))));
+        const remoteAlt = Number(state.config.remote_sat_altitude_km || 535);
+        const computeAlt = Number(state.config.compute_sat_altitude_km || 500);
+        const altMin = Math.min(remoteAlt, computeAlt);
+        const altMax = Math.max(remoteAlt, computeAlt);
+        const altSpan = Math.max(altMax - altMin, 1);
+        const yByAlt = (alt, yTop, yBottom) => yBottom - ((alt - altMin) / altSpan) * (yBottom - yTop);
+        const topoYTop = 70 * topoScale;
+        const topoYBottom = 138 * topoScale;
+        const rs = { x: centerX, y: yByAlt(remoteAlt, topoYTop, topoYBottom) + topoYOffset, type: "remote", label: `遥感星 ${state.config.remote_sat_altitude_km} km` };
+        const spanMap = { 1: 0, 2: 180, 3: 220, 4: 264 };
+        const span = (spanMap[computeCount] || 180) * topoScale;
+        const startX = centerX - span / 2;
+        const step = computeCount > 1 ? span / (computeCount - 1) : 0;
+        const computeNodes = Array.from({ length: computeCount }, (_, idx) => ({
+          x: Math.round(startX + step * idx),
+          y: yByAlt(computeAlt, topoYTop, topoYBottom) + topoYOffset,
+          type: "compute",
+          label: `计算星${idx + 1} ${state.config.compute_sat_altitude_km} km`,
+          labelDx: computeCount > 2 ? (idx - (computeCount - 1) / 2) * (6 * topoScale) : 0,
+          labelDy: 0
+        }));
+        [rs, ...computeNodes].forEach((node) => {
+          const n = document.createElement("div");
+          n.className = `topo-node topo-node--${node.type}`;
+          n.style.left = `${node.x}px`;
+          n.style.top = `${node.y}px`;
+          container.appendChild(n);
+          const lb = document.createElement("div");
+          lb.className = "topo-label";
+          const dx = Number(node.labelDx || 0);
+          const dy = Number(node.labelDy || 0);
+          lb.style.left = `${node.x - (20 * topoScale) + dx}px`;
+          lb.style.top = `${node.y + (18 * topoScale) + dy}px`;
+          lb.textContent = node.label;
+          container.appendChild(lb);
+        });
+        const dis = document.createElement("div");
+        dis.className = "topo-label";
+        dis.style.left = `${centerX}px`;
+        dis.style.transform = "translateX(-50%)";
+        dis.style.textAlign = "center";
+        const minTopoNodeY = Math.min(rs.y, ...computeNodes.map((n) => n.y));
+        dis.style.top = `${Math.max(20, Math.round(minTopoNodeY - (30 * topoScale)))}px`;
+        dis.textContent = `星间距（星座构型配置）：${interSatDistanceKm} km`;
+        container.appendChild(dis);
+        const drawLine = (a, b, cls = "") => {
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const line = document.createElement("div");
+          line.className = `topo-line ${cls}`;
+          line.style.left = `${a.x}px`;
+          line.style.top = `${a.y}px`;
+          line.style.width = `${Math.max(Math.hypot(dx, dy), 0)}px`;
+          line.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+          container.appendChild(line);
+        };
+        computeNodes.forEach((node) => drawLine(rs, node));
+        for (let i = 0; i < computeNodes.length - 1; i++) {
+          drawLine(computeNodes[i], computeNodes[i + 1], "l2");
+        }
+      }
+
+      function renderConstellationSummary() {
+        const summaryRoot = byId("constellationSummary");
+        if (!summaryRoot) return;
+        const summaries = [
+          ["星座结构", `${state.config.compute_sat_count + 1} 星协同（1 遥感星 + ${state.config.compute_sat_count} 计算星）`],
+          ["轨道配置", `遥感星 ${state.config.remote_sat_altitude_km} km / 计算星 ${state.config.compute_sat_altitude_km} km`],
+          ["组网间距", `计算星间距 ${state.config.inter_sat_distance_km} km`]
+        ];
+        summaryRoot.innerHTML = summaries.map(([k, v]) => `
+          <div class="summary-line">
+            <div class="k">${k}</div>
+            <div class="v">${v}</div>
+          </div>
+        `).join("");
+      }
+
+      function getOverviewKpiRow() {
+        if (!state.overviewResultsDisplayed) return null;
+        return state.kpiOverviewRow;
+      }
+
+      function getRows() {
+        if (!state.overviewResultsDisplayed) return [];
+        if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+        return state.sweepRows.length ? state.sweepRows : mockRows;
+      }
+      function getBandwidthSensitivityRows() {
+        if (!state.overviewResultsDisplayed) return [];
+        return state.bandwidthSensitivityRows.length ? state.bandwidthSensitivityRows : getRows();
+      }
+      function getComputeSensitivityRows() {
+        if (!state.overviewResultsDisplayed) return [];
+        if (state.computeSensitivityRows.length) return state.computeSensitivityRows;
+        const baseline = getRows();
+        const baseP = Number(state.config.big_star_peak_pflops_single || state.config.big_star_peak_pflops || 10.0);
+        return [
+          { single_star_pflops: +(baseP * 0.6).toFixed(2), total_latency_s: baseline[0].total_latency_s * 1.42 },
+          { single_star_pflops: +(baseP * 0.8).toFixed(2), total_latency_s: baseline[1].total_latency_s * 1.23 },
+          { single_star_pflops: +(baseP * 1.0).toFixed(2), total_latency_s: baseline[2].total_latency_s * 1.0 },
+          { single_star_pflops: +(baseP * 1.2).toFixed(2), total_latency_s: baseline[3].total_latency_s * 0.89 },
+          { single_star_pflops: +(baseP * 1.4).toFixed(2), total_latency_s: baseline[4].total_latency_s * 0.83 }
+        ];
+      }
+      function renderKpi() {
+        const resetKpi = () => {
+          [
+            "kpiPrefillLatency", "kpiPrefillComputeTime", "kpiPrefillMemoryTime", "kpiPrefillBottleneck",
+            "kpiPrefillPflops", "kpiPrefillPeakMem",
+            "kpiDecodeLatency", "kpiDecodeComputeTime", "kpiDecodeMemoryTime", "kpiDecodeBottleneck",
+            "kpiDecodePflops", "kpiDecodeEnergyEfficiency"
+          ].forEach((id) => {
+            const el = byId(id);
+            if (el) {
+              el.textContent = "—";
+              el.classList.remove("unsupported-metric");
+            }
+          });
+        };
+        if (!state.overviewResultsDisplayed) {
+          resetKpi();
+          return;
+        }
+        const r = getOverviewKpiRow();
+        if (!r) {
+          resetKpi();
+          return;
+        }
+        const setMetric = (id, value, formatter = (v) => String(v)) => {
+          const el = byId(id);
+          if (!el) return;
+          if (value === null || value === "—" || !Number.isFinite(Number(value))) {
+            el.textContent = "—";
+            el.classList.add("unsupported-metric");
+          } else {
+            el.textContent = formatter(Number(value));
+            el.classList.remove("unsupported-metric");
+          }
+        };
+        const setTextMetric = (id, value) => {
+          const el = byId(id);
+          if (!el) return;
+          if (value === null || value === "—" || value === "") {
+            el.textContent = "—";
+            el.classList.add("unsupported-metric");
+          } else {
+            el.textContent = String(value);
+            el.classList.remove("unsupported-metric");
+          }
+        };
+        const prefillTotal = r.prefill_time_s;
+        const prefillCompute = r.prefill_compute_time_s;
+        const prefillMemory = r.prefill_memory_time_s;
+        const prefillBottleneck = String(r.prefill_bottleneck || "-");
+        const decodeTokensKpi = Math.max(1, Math.round(Number(state.config.decode_tokens) || 1));
+        let decodeTotalS = r.decode_total_latency_s;
+        if (decodeTotalS !== null && !Number.isFinite(Number(decodeTotalS))) {
+          decodeTotalS =
+            Number(r.decode_latency_s_per_token || 0) * decodeTokensKpi;
+        }
+        const decodeCompute = r.decode_compute_latency_s_per_token;
+        const decodeMemory = r.decode_memory_latency_s_per_token;
+        const decodeBottleneck = String(r.decode_bottleneck || "-");
+        const decodeEffectivePflops = Number(r.decode_effective_compute_pflops);
+        const decodeEnergyEfficiency = Number(r.decode_energy_efficiency_tokens_per_j);
+        const prefillPeakMemGb = r.single_star_peak_memory_gb ?? r.prefill_peak_memory_gb ?? null;
+        setMetric("kpiPrefillLatency", prefillTotal, (v) => `${(v * 1e3).toFixed(2)}`);
+        setMetric("kpiPrefillComputeTime", prefillCompute, (v) => `${v.toFixed(4)}`);
+        setMetric("kpiPrefillMemoryTime", prefillMemory, (v) => `${v.toFixed(4)}`);
+        setTextMetric("kpiPrefillBottleneck", prefillBottleneck);
+        setMetric("kpiPrefillPflops", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
+        setMetric("kpiPrefillPeakMem", prefillPeakMemGb, (v) => `${v.toFixed(2)}`);
+        setMetric("kpiDecodeLatency", decodeTotalS, (v) => `${(v * 1e3).toFixed(2)}`);
+        setMetric("kpiDecodeComputeTime", decodeCompute, (v) => `${(v * 1e3).toFixed(2)}`);
+        setMetric("kpiDecodeMemoryTime", decodeMemory, (v) => `${(v * 1e3).toFixed(2)}`);
+        setTextMetric("kpiDecodeBottleneck", decodeBottleneck);
+        setMetric("kpiDecodePflops", decodeEffectivePflops, (v) => `${v.toFixed(3)}`);
+        setMetric("kpiDecodeEnergyEfficiency", decodeEnergyEfficiency, (v) => `${v.toFixed(3)}`);
+      }
+
+      function renderDonut() {
+        if (!byId("donut") || !byId("delayLegend")) return;
+        if (!state.overviewResultsDisplayed) {
+          const radius = 68;
+          byId("donut").innerHTML = `
+            <svg width="180" height="180" viewBox="0 0 180 180">
+              <circle cx="90" cy="90" r="${radius}" fill="none" stroke="#17345f" stroke-width="20" />
+            </svg>
+          `;
+          byId("delayLegend").innerHTML = "";
+          return;
+        }
+        const cfg = state.config || {};
+        const bw = Math.max(1, Number(cfg.link_bandwidth_gbps_single || 400));
+        const distanceKm = Math.max(0, Number(cfg.inter_sat_distance_km || 10));
+        const flops = Math.max(0, Number(cfg.flops_per_sample || 0));
+        const peakPflops = Math.max(1e-9, Number(cfg.big_star_peak_pflops_single || cfg.big_star_peak_pflops || 10.0));
+        const memoryBwBytesPerSec = Math.max(1e-9, Number(cfg.single_node_memory_bandwidth_bytes_per_sec || 2.0e13));
+        const prefillMemoryBytes = Math.max(0, Number(cfg.prefill_memory_bytes_per_patch || 5.0e10));
+        const imageType = String(cfg.image_type || "RGB").toUpperCase();
+        const channels = imageType === "SAR" ? 1 : 3;
+        const bytesPerPixel = imageType === "SAR" ? 4 : 2;
+        const tileText = String(cfg.tile_size || "512x512").toLowerCase();
+        const [tileW, tileH] = tileText.split("x").map((n) => Number(n.trim()));
+        if (!Number.isFinite(tileW) || !Number.isFinite(tileH) || tileW <= 0 || tileH <= 0) {
+          byId("donut").innerHTML = "";
+          byId("delayLegend").innerHTML = "";
+          return;
+        }
+        const tileMb = (tileW * tileH * channels * bytesPerPixel) / 1_000_000;
+        const transfer = (dataMb) => {
+          const serialization = (dataMb * 8.0) / (bw * 1000.0);
+          const propagation = (distanceKm * 1000.0) / 299792458.0;
+          return serialization + propagation;
+        };
+        const txRemoteToCompute = transfer(tileMb);
+        const txComputeToCompute = transfer(Number(cfg.prefill_inter_stage_transfer_mb || 0));
+        const effectiveStarFlops = peakPflops * 1e15;
+        const computeLatency = (flops / effectiveStarFlops);
+        const memoryLatency = prefillMemoryBytes / memoryBwBytesPerSec;
+        const prefillLatency = Math.max(computeLatency, memoryLatency);
+        const seg = [
+          { k: "遥感星-计算星传输", v: txRemoteToCompute, c: "#57a6ff" },
+          { k: "计算星-计算星传输", v: txComputeToCompute, c: "#7f76ff" },
+          { k: "计算星 Prefill 时延", v: prefillLatency, c: "#3fd389" }
+        ];
+        const total = seg.reduce((s, i) => s + i.v, 0.00001);
+        const radius = 68;
+        const per = 2 * Math.PI * radius;
+        let acc = 0;
+        let circles = "";
+        seg.forEach((s) => {
+          const ratio = s.v / total;
+          circles += `<circle cx="90" cy="90" r="${radius}" fill="none" stroke="${s.c}" stroke-width="20" stroke-dasharray="${(ratio * per).toFixed(3)} ${(per - ratio * per).toFixed(3)}" stroke-dashoffset="${(-acc * per).toFixed(3)}" />`;
+          acc += ratio;
+        });
+        byId("donut").innerHTML = `
+          <svg width="180" height="180" viewBox="0 0 180 180">
+            <circle cx="90" cy="90" r="${radius}" fill="none" stroke="#17345f" stroke-width="20" />
+            ${circles}
+          </svg>
+        `;
+        byId("delayLegend").innerHTML = seg.map((s) => `
+          <div class="legend-item">
+            <div><span class="dot" style="background:${s.c}; margin-left:0;"></span>${s.k}</div>
+            <b>${(s.v / total * 100).toFixed(1)}%</b>
+          </div>
+        `).join("");
+      }
+
+      function _log10(x) {
+        return Math.log(x) / Math.LN10;
+      }
+
+      /** 算力轴：标准 1–2–5 刻度 */
+      function _niceStepStandard(rough) {
+        const pow = Math.pow(10, Math.floor(_log10(Math.max(rough, 1e-12))));
+        const m = rough / pow;
+        const f = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
+        return f * pow;
+      }
+
+      /** 带宽、时延：优先 5 / 10 的整数倍步长 */
+      function _niceStepInt5_10(rough, dataMax) {
+        const pow = Math.pow(10, Math.floor(_log10(Math.max(rough, 1e-12))));
+        const m = rough / pow;
+        const cand = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+        let step = 10 * pow;
+        for (const c of cand) {
+          const s = c * pow;
+          if (s >= rough * 0.55) {
+            step = s;
+            break;
+          }
+          step = s;
+        }
+        if (dataMax >= 15 && step < 5 && rough >= 2) step = 5;
+        if (step >= 10) step = Math.round(step / 10) * 10;
+        else if (step > 5) step = 10;
+        return Math.max(step, 1);
+      }
+
+      /** 时延：较大时用 5/10 整数步长；秒级较小时用 1–2–5 小数步长 */
+      function _niceStepLatency(rough, hi) {
+        if (hi >= 5) return _niceStepInt5_10(rough, hi);
+        return _niceStepStandard(rough);
+      }
+
+      /** 纵轴通用：较大范围用 5/10 整数步，小范围用 1–2–5 小数步 */
+      function _niceStepYGeneric(rough, hi) {
+        const ahi = Math.abs(hi);
+        if (ahi >= 5) return _niceStepInt5_10(rough, ahi);
+        return _niceStepStandard(rough);
+      }
+
+      function _buildAxisTicks(dMin, dMax, targetTicks, stepFn, axisOpts) {
+        const minLo = axisOpts && Number.isFinite(axisOpts.minLo) ? axisOpts.minLo : -Infinity;
+        const span = Math.max(dMax - dMin, 1e-12);
+        let lo = dMin - span * 0.06;
+        let hi = dMax + span * 0.06;
+        if (dMax <= dMin + 1e-12) {
+          lo = dMin - Math.max(span, 1) * 0.5;
+          hi = dMax + Math.max(span, 1) * 0.5;
+        }
+        if (dMin >= minLo && lo < minLo) lo = minLo;
+        const rough = (hi - lo) / Math.max(targetTicks - 1, 1);
+        const step = stepFn(rough, hi);
+        let t0 = Math.floor(lo / step - 1e-9) * step;
+        let t1 = Math.ceil(hi / step + 1e-9) * step;
+        if (t1 < t0) t1 = t0 + step;
+        const ticks = [];
+        let k = 0;
+        while (k <= 24) {
+          const t = t0 + k * step;
+          if (t > t1 + step * 1e-6) break;
+          ticks.push(t);
+          k += 1;
+        }
+        return { lo: t0, hi: t1, ticks, step };
+      }
+
+      function prepareHiDPICanvas(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const cssWidth = Math.max(1, Math.round(rect.width || canvas.width));
+        const cssHeight = Math.max(1, Math.round(rect.height || canvas.height));
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        const pxWidth = Math.round(cssWidth * dpr);
+        const pxHeight = Math.round(cssHeight * dpr);
+        if (canvas.width !== pxWidth || canvas.height !== pxHeight) {
+          canvas.width = pxWidth;
+          canvas.height = pxHeight;
+        }
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { ctx, width: cssWidth, height: cssHeight };
+      }
+
+      function drawLineChart(canvasId, rows, xKey, yKey, yUnit, highlightX, xLabelOverride, chartOpts) {
+        const opts = chartOpts && typeof chartOpts === "object" ? chartOpts : {};
+        const showPointValues = opts.showPointValues !== false;
+        const canvas = byId(canvasId);
+        const { ctx, width: viewW, height: viewH } = prepareHiDPICanvas(canvas);
+        const data = [...rows]
+          .filter((d) => Number.isFinite(Number(d[xKey])) && Number.isFinite(Number(d[yKey])))
+          .sort((a, b) => Number(a[xKey]) - Number(b[xKey]));
+        ctx.clearRect(0, 0, viewW, viewH);
+        const bigChart = viewH >= 360;
+        const labelFont = bigChart ? "15px sans-serif" : "12px sans-serif";
+        const tickFont = bigChart ? "13px sans-serif" : viewW < 420 ? "10px sans-serif" : "11px sans-serif";
+        const pointR = bigChart ? { normal: 5, active: 6 } : { normal: 3.5, active: 4.5 };
+        if (!data.length) {
+          ctx.textAlign = "left";
+          return;
+        }
+        const xs = data.map((d) => Number(d[xKey]));
+        const ys = data.map((d) => Number(d[yKey]));
+        const dMinX = Math.min(...xs);
+        const dMaxX = Math.max(...xs);
+        const dMinY = Math.min(...ys);
+        const dMaxY = Math.max(...ys);
+        const yMag = Math.max(Math.abs(dMinY), Math.abs(dMaxY), 1e-12);
+
+        const isBw = xKey === "link_bandwidth_gbps";
+        const isPf = xKey === "single_star_pflops";
+        const targetXTicks = viewW < 460 ? 5 : 6;
+        const targetYTicks = viewH < 300 ? 4 : 6;
+        const xClamp0 = dMinX >= 0 ? { minLo: 0 } : {};
+        const yClamp0 = dMinY >= 0 ? { minLo: 0 } : {};
+        const xAxis = isBw
+          ? _buildAxisTicks(dMinX, dMaxX, targetXTicks, (r, hi) => _niceStepInt5_10(r, hi), xClamp0)
+          : isPf
+          ? _buildAxisTicks(dMinX, dMaxX, targetXTicks, (r, hi) => _niceStepStandard(r), xClamp0)
+          : _buildAxisTicks(dMinX, dMaxX, targetXTicks, (r, hi) => _niceStepLatency(r, hi), xClamp0);
+        const yAxis = _buildAxisTicks(dMinY, dMaxY, targetYTicks, (r, hi) => _niceStepYGeneric(r, hi), yClamp0);
+
+        const xSpan = Math.max(xAxis.hi - xAxis.lo, 1e-9);
+        const ySpan = Math.max(yAxis.hi - yAxis.lo, 1e-9);
+
+        const formatTickX = (v) => {
+          if (!Number.isFinite(v)) return "—";
+          if (isBw) return String(Math.round(v));
+          if (isPf) return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(1);
+          if (dMaxX >= 200 && dMaxX - dMinX > 40) return String(Math.round(v));
+          return Math.abs(v - Math.round(v)) < 1e-3 ? String(Math.round(v)) : v.toFixed(1);
+        };
+        const formatTickY = (v) => {
+          if (!Number.isFinite(v)) return "—";
+          const av = Math.abs(v);
+          if (yMag >= 1e6) return `${(v / 1e6).toFixed(av >= 1e7 ? 0 : 1)}M`;
+          if (yMag >= 1e4) return `${(v / 1e3).toFixed(yMag >= 1e5 ? 0 : 1)}k`;
+          if (yMag >= 1000) return String(Math.round(v));
+          if (yMag >= 100) return String(Math.round(v));
+          if (yMag >= 5) return String(Math.round(v));
+          if (av >= 1) return Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : v.toFixed(2);
+          if (av >= 0.01) return v.toFixed(3);
+          return v.toFixed(4);
+        };
+
+        ctx.font = tickFont;
+        let maxYTickW = 0;
+        yAxis.ticks.forEach((tv) => {
+          maxYTickW = Math.max(maxYTickW, ctx.measureText(String(formatTickY(tv))).width);
+        });
+
+        const yTickPad = 6;
+        const yTitleRadius = bigChart ? 9 : 7;
+        const padBPre = bigChart ? 76 : 58;
+        const xTitleBaseline = viewH - (bigChart ? 12 : 10);
+        const xTickTop = viewH - padBPre + 6;
+        const xTickFontH = bigChart ? 14 : 12;
+        const xGapTickToTitle = xTitleBaseline - xTickTop - xTickFontH;
+        const yGapTickToTitle = Math.round(Math.max(24, Math.min(42, xGapTickToTitle * 0.88)));
+        let padL = Math.max(bigChart ? 58 : 48, Math.ceil(maxYTickW + yTickPad + 10));
+        let yTitleX = padL - maxYTickW - yTickPad - yGapTickToTitle - yTitleRadius;
+        const minTitleX = 14 + yTitleRadius;
+        if (yTitleX < minTitleX) {
+          padL += minTitleX - yTitleX;
+          yTitleX = minTitleX;
+        }
+
+        const pad = {
+          l: padL,
+          r: bigChart ? 28 : 20,
+          t: bigChart ? 28 : 20,
+          b: bigChart ? 76 : 58
+        };
+        const w = viewW - pad.l - pad.r;
+        const h = viewH - pad.t - pad.b;
+        const sx2 = (x) => pad.l + ((x - xAxis.lo) / xSpan) * w;
+        const sy2 = (y) => pad.t + h - ((y - yAxis.lo) / ySpan) * h;
+
+        ctx.strokeStyle = "rgba(171, 198, 239, 0.22)";
+        ctx.lineWidth = 1;
+        yAxis.ticks.forEach((yVal) => {
+          const y = sy2(yVal);
+          if (y < pad.t - 1 || y > pad.t + h + 1) return;
+          ctx.beginPath();
+          ctx.moveTo(pad.l, y);
+          ctx.lineTo(pad.l + w, y);
+          ctx.stroke();
+        });
+
+        ctx.font = tickFont;
+        ctx.fillStyle = "rgba(180, 205, 240, 0.95)";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        const ny = yAxis.ticks.length;
+        const yLabelStride = ny > 10 ? 2 : 1;
+        yAxis.ticks.forEach((yVal, yi) => {
+          const y = sy2(yVal);
+          if (y < pad.t - 8 || y > pad.t + h + 8) return;
+          const atEnd = yi === 0 || yi === ny - 1;
+          if (!atEnd && yLabelStride > 1 && yi % yLabelStride !== 0) return;
+          ctx.fillText(String(formatTickY(yVal)), pad.l - yTickPad, y);
+        });
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const xTickY = pad.t + h + 6;
+        const nx = xAxis.ticks.length;
+        const xLabelStride = nx > 14 ? 3 : nx > 9 ? 2 : 1;
+        xAxis.ticks.forEach((xVal, xi) => {
+          const x = sx2(xVal);
+          if (x < pad.l - 12 || x > pad.l + w + 12) return;
+          const atEnd = xi === 0 || xi === nx - 1;
+          if (!atEnd && xLabelStride > 1 && xi % xLabelStride !== 0) return;
+          ctx.fillText(formatTickX(xVal), x, xTickY);
+        });
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.beginPath();
+        data.forEach((d, i) => {
+          const x = sx2(d[xKey]);
+          const y = sy2(d[yKey]);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = "#5aa9ff";
+        ctx.lineWidth = bigChart ? 2.5 : 2;
+        ctx.stroke();
+
+        data.forEach((d) => {
+          const x = sx2(d[xKey]);
+          const y = sy2(d[yKey]);
+          const hx = Number(highlightX);
+          const active =
+            (Number.isFinite(hx) && Math.abs(Number(d[xKey]) - hx) < 1e-6) || d[xKey] === highlightX;
+          ctx.beginPath();
+          ctx.arc(x, y, active ? pointR.active : pointR.normal, 0, Math.PI * 2);
+          ctx.fillStyle = active ? "#f5a24f" : "#9fd0ff";
+          ctx.fill();
+          if (showPointValues) {
+            ctx.fillStyle = active ? "#ffd4a1" : "#cbe1ff";
+            ctx.font = labelFont;
+            const yv = Number(d[yKey]);
+            ctx.fillText(`${Number.isFinite(yv) ? yv.toFixed(2) : String(d[yKey])}`, x - (bigChart ? 16 : 14), y - (bigChart ? 12 : 10));
+          }
+        });
+
+        const xLabel =
+          xLabelOverride || (isBw ? "星间互联带宽 (Gbps)" : isPf ? "单星峰值算力 (PFLOPS)" : "自变量");
+        const xTitleY = viewH - (bigChart ? 12 : 10);
+        ctx.fillStyle = "#9fbbe6";
+        ctx.font = labelFont;
+        ctx.textAlign = "center";
+        ctx.fillText(xLabel, viewW / 2, xTitleY);
+
+        ctx.save();
+        ctx.translate(yTitleX, viewH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(yUnit, 0, 0);
+        ctx.restore();
+        ctx.textAlign = "left";
+      }
+
+      /** 实验结果：模型规模验证 — 横轴模型类型、纵轴单星峰值显存（GB） */
+      function drawExpBarChartMemory(canvasId, categoryLabels, valuesGb, yAxisTitle) {
+        const canvas = byId(canvasId);
+        if (!canvas) return;
+        const { ctx, width: viewW, height: viewH } = prepareHiDPICanvas(canvas);
+        ctx.clearRect(0, 0, viewW, viewH);
+        ctx.fillStyle = "#0a1628";
+        ctx.fillRect(0, 0, viewW, viewH);
+        const n = Math.min(categoryLabels.length, valuesGb.length);
+        const vals = [];
+        for (let i = 0; i < n; i++) {
+          const v = Number(valuesGb[i]);
+          vals.push(Number.isFinite(v) ? v : 0);
+        }
+        if (!n) return;
+        const pad = { l: 56, r: 22, t: 28, b: 62 };
+        const w = viewW - pad.l - pad.r;
+        const h = viewH - pad.t - pad.b;
+        const dMax = Math.max(...vals, 1e-6);
+        const dMin = 0;
+        const yAxis = _buildAxisTicks(dMin, dMax, 5, (r, hi) => _niceStepYGeneric(r, hi), { minLo: 0 });
+        const ySpan = Math.max(yAxis.hi - yAxis.lo, 1e-9);
+        const sy = (y) => pad.t + h - ((y - yAxis.lo) / ySpan) * h;
+        const gap = 0.2;
+        const slot = w / n;
+        const bw = slot * (1 - gap);
+        ctx.strokeStyle = "rgba(171, 198, 239, 0.22)";
+        ctx.lineWidth = 1;
+        yAxis.ticks.forEach((yv) => {
+          const y = sy(yv);
+          if (y < pad.t - 1 || y > pad.t + h + 1) return;
+          ctx.beginPath();
+          ctx.moveTo(pad.l, y);
+          ctx.lineTo(pad.l + w, y);
+          ctx.stroke();
+        });
+        ctx.font = "11px sans-serif";
+        ctx.fillStyle = "rgba(180, 205, 240, 0.95)";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        yAxis.ticks.forEach((yv) => {
+          const y = sy(yv);
+          if (y < pad.t - 8 || y > pad.t + h + 8) return;
+          const lab = Math.abs(yv - Math.round(yv)) < 1e-4 ? String(Math.round(yv)) : yv.toFixed(1);
+          ctx.fillText(lab, pad.l - 6, y);
+        });
+        for (let i = 0; i < n; i++) {
+          const cx = pad.l + slot * i + slot / 2;
+          const x0 = cx - bw / 2;
+          const y0 = sy(vals[i]);
+          const yb = sy(0);
+          ctx.fillStyle = "rgba(90, 169, 255, 0.88)";
+          ctx.fillRect(x0, y0, bw, Math.max(1, yb - y0));
+          ctx.strokeStyle = "rgba(200, 220, 255, 0.35)";
+          ctx.strokeRect(x0, y0, bw, Math.max(1, yb - y0));
+          ctx.fillStyle = "#dbeaff";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.font = "12px sans-serif";
+          ctx.fillText(vals[i].toFixed(2), cx, y0 - 4);
+          ctx.textBaseline = "top";
+          ctx.fillStyle = "#9fbbe6";
+          ctx.font = "11px sans-serif";
+          ctx.fillText(String(categoryLabels[i] ?? ""), cx, pad.t + h + 8);
+        }
+        ctx.save();
+        ctx.translate(16, pad.t + h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#9fbbe6";
+        ctx.font = "12px sans-serif";
+        ctx.fillText(yAxisTitle || "单星峰值显存（GB）", 0, 0);
+        ctx.restore();
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#9fbbe6";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("模型类型", viewW / 2, viewH - 12);
+      }
+
+      const EXP_TEMPLATES = [
+        { id: "inter_sat_distance", title: "星间距离实验", desc: "扫描编队间距对端到端时延的影响" },
+        { id: "bandwidth_sweep", title: "星间互联带宽扫描实验", desc: "多档链路带宽下的敏感性曲线" },
+        { id: "compute_sweep", title: "单星算力扫描实验", desc: "单星 PFLOPS 与当前星间互联带宽组合" },
+        { id: "model_scale", title: "模型部署规模验证", desc: "3B / 7B / 32B 单星峰值显存柱状对比" }
+      ];
+
+      /** 模型部署规模验证：固定对比 3B/7B/32B，不在界面单独选模型或编辑扫描串 */
+      const MODEL_SCALE_FIXED_SCAN = "3B,7B,32B";
+      const MODEL_SCALE_BASE_MODEL_ID = "Qwen2.5-VL-7B";
+
+      function parseExpScanList(str) {
+        return String(str || "")
+          .split(/[,，\s]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+
+      function defaultExpScanForTemplate(templateId) {
+        readConfigFromInputs();
+        switch (templateId) {
+          case "inter_sat_distance":
+            return "5,10,20,50,100";
+          case "bandwidth_sweep":
+            return (state.config.link_bandwidth_gbps_sweep || []).join(",");
+          case "compute_sweep":
+            return (state.config.big_star_peak_pflops_sweep || []).join(",");
+          case "model_scale":
+            return MODEL_SCALE_FIXED_SCAN;
+          default:
+            return "10,50,100";
+        }
+      }
+
+      /** 算力扫描模板：扫描串中第一个合法 PFLOPS 作为内部标称 */
+      function nominalPflopsFromComputeSweepScan(scanStr) {
+        const nums = parseExpScanList(scanStr)
+          .map((x) => Number(String(x).trim()))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        return nums.length ? nums[0] : null;
+      }
+
+      function updateExpCoreFieldsVisibility() {
+        const wrapBw = byId("expCfgBwFieldWrap");
+        const wrapPf = byId("expCfgPflopsFieldWrap");
+        const wrapModel = byId("expCfgModelFieldWrap");
+        const wrapScan = byId("expCfgScanFieldWrap");
+        const wrapMirrorInterSat = byId("expMirrorInterSatDistWrap");
+        const lab = byId("expCfgScanLabel");
+        const scanInp = byId("expCfgScan");
+        const tid = state.experiment.selectedTemplate;
+        const isBwSweep = tid === "bandwidth_sweep";
+        const isComputeSweep = tid === "compute_sweep";
+        const isModelScale = tid === "model_scale";
+        if (wrapBw) wrapBw.style.display = isBwSweep ? "none" : "";
+        if (wrapPf) wrapPf.style.display = isComputeSweep ? "none" : "";
+        if (wrapModel) wrapModel.style.display = isModelScale ? "none" : "";
+        if (wrapScan) wrapScan.style.display = isModelScale ? "none" : "";
+        if (wrapMirrorInterSat) wrapMirrorInterSat.style.display = tid === "inter_sat_distance" ? "none" : "";
+        if (lab && !isModelScale) {
+          if (isBwSweep) {
+            lab.textContent = "扫描带宽范围 Gbps，逗号分隔";
+          } else if (tid === "inter_sat_distance") {
+            lab.textContent = "扫描星间距离 km，逗号分隔";
+          } else if (isComputeSweep) {
+            lab.textContent = "扫描单星峰值算力 PFLOPS，逗号分隔";
+          } else {
+            lab.textContent = "扫描参数范围，逗号分隔";
+          }
+        }
+        if (scanInp && isBwSweep) {
+          scanInp.placeholder = "例：10,50,100,200,400";
+        } else if (scanInp && isComputeSweep) {
+          scanInp.placeholder = "例：6,8,10,12,14";
+        } else if (scanInp && tid === "inter_sat_distance") {
+          scanInp.placeholder = "例：5,10,20,50,100";
+        } else if (scanInp && !isModelScale) {
+          scanInp.placeholder = "例：10,50,100,200 或 6,8,10,12";
+        }
+      }
+
+      function readExpDraftFromInputs() {
+        const d = state.experiment.designDraft;
+        const tid = state.experiment.selectedTemplate;
+        const m = byId("expCfgModel");
+        const f = byId("expCfgFormation");
+        const pf = byId("expCfgPflops");
+        const bw = byId("expCfgBw");
+        const sc = byId("expCfgScan");
+        if (tid === "model_scale") {
+          d.scan = MODEL_SCALE_FIXED_SCAN;
+          d.model = MODEL_SCALE_BASE_MODEL_ID;
+          if (m) m.value = d.model;
+          if (sc) sc.value = d.scan;
+        } else {
+          if (m) d.model = m.value;
+          if (sc) d.scan = sc.value.trim();
+        }
+        if (f) d.formation = f.value;
+        if (tid === "compute_sweep") {
+          const np = nominalPflopsFromComputeSweepScan(d.scan);
+          d.pflops = np != null ? np : (Number.isFinite(d.pflops) && d.pflops > 0 ? d.pflops : 10);
+          if (pf) pf.value = String(d.pflops);
+        } else if (pf) {
+          d.pflops = Number(pf.value);
+        }
+        const bwWrap = byId("expCfgBwFieldWrap");
+        const bwFieldVisible = !bwWrap || bwWrap.style.display !== "none";
+        if (bw && bwFieldVisible) {
+          const v = Math.round(Number(bw.value));
+          if (Number.isFinite(v) && v >= 1) d.bw = v;
+        }
+      }
+
+      function writeExpDraftToInputs() {
+        const d = state.experiment.designDraft;
+        const setVal = (id, v) => {
+          const el = byId(id);
+          if (el && v != null) el.value = v;
+        };
+        setVal("expCfgModel", d.model);
+        setVal("expCfgFormation", d.formation);
+        setVal("expCfgPflops", d.pflops);
+        setVal("expCfgBw", d.bw);
+        setVal("expCfgScan", d.scan);
+      }
+
+      function populateExpDraftFromConfig() {
+        readConfigFromInputs();
+        const d = state.experiment.designDraft;
+        const tidPop = state.experiment.selectedTemplate;
+        if (tidPop === "model_scale") {
+          d.model = MODEL_SCALE_BASE_MODEL_ID;
+          d.scan = MODEL_SCALE_FIXED_SCAN;
+        } else {
+          d.model = state.config.model_name;
+          d.scan = defaultExpScanForTemplate(tidPop);
+        }
+        const dist = Number(state.config.inter_sat_distance_km);
+        d.formation = dist > 35 ? "分散" : "紧密";
+        if (state.experiment.selectedTemplate === "compute_sweep") {
+          const np = nominalPflopsFromComputeSweepScan(d.scan);
+          d.pflops = np != null ? np : state.config.big_star_peak_pflops_single;
+        } else {
+          d.pflops = state.config.big_star_peak_pflops_single;
+        }
+        d.bw = state.config.link_bandwidth_gbps_single;
+      }
+
+      /** 将核心区草稿中的模板扫描与编队写入 state（入队前调用；已假定 DOM→主 cfg→readConfig 已同步） */
+      function applyExperimentDraftCoreToState() {
+        readExpDraftFromInputs();
+        const d = state.experiment.designDraft;
+        state.config.model_name = d.model;
+        const pts = parseExpScanList(d.scan);
+        const tid = state.experiment.selectedTemplate;
+        if (tid === "bandwidth_sweep") {
+          const nums = pts.map((x) => Math.round(Number(x))).filter((n) => Number.isFinite(n) && n > 0);
+          if (nums.length) {
+            state.config.link_bandwidth_gbps_sweep = nums;
+            state.config.link_bandwidth_gbps = [...nums];
+            state.config.link_bandwidth_gbps_single = Math.max(1, Math.round(Number(d.bw)));
+          } else {
+            state.config.link_bandwidth_gbps_single = Math.max(1, Math.round(Number(d.bw)));
+          }
+        } else {
+          state.config.link_bandwidth_gbps_single = Math.max(1, Math.round(Number(d.bw)));
+        }
+        if (tid === "compute_sweep") {
+          const nums = pts.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0);
+          if (nums.length) {
+            state.config.big_star_peak_pflops_sweep = nums;
+            state.config.big_star_peak_pflops_single = nums[0];
+            state.config.big_star_peak_pflops = state.config.big_star_peak_pflops_single;
+          } else {
+            state.config.big_star_peak_pflops_single = Number(d.pflops);
+            state.config.big_star_peak_pflops = state.config.big_star_peak_pflops_single;
+          }
+        } else {
+          state.config.big_star_peak_pflops_single = Number(d.pflops);
+          state.config.big_star_peak_pflops = state.config.big_star_peak_pflops_single;
+        }
+        if (tid === "inter_sat_distance") {
+          const nums = pts.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0);
+          if (!nums.length) {
+            state.config.inter_sat_distance_km = d.formation === "分散" ? 80 : 10;
+          }
+        } else {
+          state.config.inter_sat_distance_km = d.formation === "分散" ? 80 : 10;
+        }
+        applyRegistryModel(d.model);
+      }
+
+      function buildExpTemplateGridOnce() {
+        if (state.experiment.templatesBound) return;
+        const root = byId("expTemplateGrid");
+        if (!root) return;
+        root.innerHTML = EXP_TEMPLATES.map(
+          (t) => `
+          <button type="button" class="exp-template-btn" data-template-id="${t.id}">
+            <div class="t">${t.title}</div>
+            <div class="d">${t.desc}</div>
+          </button>`
+        ).join("");
+        root.querySelectorAll(".exp-template-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            state.experiment.selectedTemplate = btn.dataset.templateId;
+            state.experiment.designDraft.scan = defaultExpScanForTemplate(state.experiment.selectedTemplate);
+            writeExpDraftToInputs();
+            readExpDraftFromInputs();
+            updateExpCoreFieldsVisibility();
+            copyMainCfgToMirrorInputs();
+            updateExpTemplateSelectionClass();
+          });
+        });
+        state.experiment.templatesBound = true;
+        updateExpTemplateSelectionClass();
+      }
+
+      function updateExpTemplateSelectionClass() {
+        document.querySelectorAll(".exp-template-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.templateId === state.experiment.selectedTemplate);
+        });
+      }
+
+      function buildCompletedRunsListHtml() {
+        const list = state.experiment.completedRuns || [];
+        if (!list.length) {
+          return '<div class="muted" style="padding:12px;">暂无已完成实验</div>';
+        }
+        const sel = state.experiment.selectedResultId;
+        return list
+          .map((r) => {
+            const active = r.id === sel ? " active" : "";
+            const t = new Date(r.createdAt).toLocaleString();
+            return `<div class="exp-results-run-item${active}" data-exp-result-id="${r.id}">
+              <div>${r.templateTitle || r.title}</div>
+              <div class="meta">${t} · ${r.chartType === "heatmap" ? "热力图" : r.chartType === "bar" ? "柱状图" : "曲线"}</div>
+            </div>`;
+          })
+          .join("");
+      }
+
+      function bindExperimentRunListClicks(root, navigateToResultsPage) {
+        root.querySelectorAll("[data-exp-result-id]").forEach((el) => {
+          el.addEventListener("click", () => {
+            const id = el.getAttribute("data-exp-result-id");
+            state.experiment.selectedResultId = id;
+            if (navigateToResultsPage) {
+              document.querySelector('.nav-btn[data-page="experiment-results"]')?.click();
+            } else {
+              renderExperimentResults();
+            }
+            renderExpTaskList();
+          });
+        });
+      }
+
+      function renderExpTaskList() {
+        const root = byId("expTaskList");
+        if (!root) return;
+        root.innerHTML = buildCompletedRunsListHtml();
+        bindExperimentRunListClicks(root, true);
+      }
+
+      function renderExperimentDesign() {
+        const page = byId("page-experiment-design");
+        if (!page || !page.classList.contains("active")) return;
+        if (!state.experiment.designFormInitialized) {
+          populateExpDraftFromConfig();
+          writeExpDraftToInputs();
+          state.experiment.designFormInitialized = true;
+        }
+        buildExpTemplateGridOnce();
+        updateExpCoreFieldsVisibility();
+        updateExpTemplateSelectionClass();
+        const startBtn = byId("btnExpStart");
+        if (startBtn) startBtn.disabled = !!state.experiment.runExperimentBusy;
+        renderExpTaskList();
+        if (state.experiment.shouldHydrateMirror) {
+          renderExperimentMirrorFromState();
+          syncModelStructureVisibility();
+          state.experiment.shouldHydrateMirror = false;
+          state.experiment.mirrorDomReady = true;
+        }
+      }
+
+      /** 通用二维热力图：matrix[row][col]，colLabels / rowLabels 为轴刻度文字 */
+      function drawExpHeatmapFromMatrix(canvasId, matrix, colLabels, rowLabels, caption) {
+        const canvas = byId(canvasId);
+        if (!canvas || !matrix || !matrix.length) return;
+        const { ctx, width: W, height: H } = prepareHiDPICanvas(canvas);
+        ctx.clearRect(0, 0, W, H);
+        const rows = matrix.length;
+        const cols = Math.max(1, matrix[0].length);
+        const pad = 40;
+        const cw = (W - pad * 2) / cols;
+        const ch = (H - pad * 2) / rows;
+        let vmin = Infinity;
+        let vmax = -Infinity;
+        for (let j = 0; j < rows; j += 1) {
+          for (let i = 0; i < cols; i += 1) {
+            const v = Number(matrix[j][i]);
+            if (Number.isFinite(v)) {
+              vmin = Math.min(vmin, v);
+              vmax = Math.max(vmax, v);
+            }
+          }
+        }
+        if (!Number.isFinite(vmin)) vmin = 0;
+        if (!Number.isFinite(vmax) || vmax <= vmin) vmax = vmin + 1;
+        for (let j = 0; j < rows; j += 1) {
+          for (let i = 0; i < cols; i += 1) {
+            const v = Number(matrix[j][i]);
+            const tn = Number.isFinite(v)
+              ? Math.max(0, Math.min(1, (v - vmin) / (vmax - vmin)))
+              : 0;
+            const r = Math.round(40 + tn * 180);
+            const g = Math.round(200 - tn * 160);
+            const b = Math.round(120 - tn * 100);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(pad + i * cw, pad + j * ch, cw - 2, ch - 2);
+            ctx.fillStyle = "rgba(255,255,255,0.88)";
+            ctx.font = "12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(Number.isFinite(v) ? v.toFixed(1) : "—", pad + i * cw + cw / 2, pad + j * ch + ch / 2);
+          }
+        }
+        ctx.fillStyle = "#9fb4d9";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        (colLabels || []).forEach((lab, i) => {
+          ctx.fillText(String(lab), pad + i * cw + cw / 2, H - 10);
+        });
+        ctx.textAlign = "right";
+        (rowLabels || []).forEach((lab, j) => {
+          ctx.fillText(String(lab), pad - 6, pad + j * ch + ch / 2 + 4);
+        });
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#dbeaff";
+        if (caption) ctx.fillText(caption, 8, 14);
+      }
+
+      function rowsToCsvLines(rows) {
+        if (!rows.length) return [];
+        const keys = Object.keys(rows[0]);
+        return [keys.join(",")].concat(rows.map((r) => keys.map((k) => String(r[k] ?? "")).join(",")));
+      }
+
+      /** 实验结果页曲线 / 热力图纵轴（横轴为各模板自变量） */
+      const EXP_RESULT_METRIC_SPECS = [
+        { yKey: "prefill_latency_ms", yUnit: "Prefill延时 (ms)" },
+        { yKey: "decode_throughput_tokens_per_s", yUnit: "Decode速度 (tokens/s)" }
+      ];
+      const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+      const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+
+      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+        const tok = Math.max(1, Number(decodeTokens) || 1);
+        const prefillS = Number(m?.prefill_time_s);
+        const dlat = Number(m?.decode_latency_s_per_token);
+        let decodeTotS = Number(m?.decode_total_latency_s);
+        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+        const taskPdMs =
+          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+        return {
+          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+          energy: Number.isFinite(energy) ? energy : 0,
+          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+        };
+      }
+
+      function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+        const t = Number(totalS);
+        const tok = Math.max(1, Number(decodeTokens) || 1);
+        if (!Number.isFinite(t) || t <= 0) {
+          return { prefillMs: 0, decodeTps: 0, energy: 0, taskPdMs: 0 };
+        }
+        const prefillS = t * 0.38;
+        const decodePerTokS = (t * 0.22) / tok;
+        const decodeTotS = decodePerTokS * tok;
+        const energy = decodePerTokS > 0 ? 1 / Math.max(1e-9, 200 * decodePerTokS) : 0;
+        return {
+          prefillMs: prefillS * 1000,
+          decodeTps: decodePerTokS > 0 ? 1 / decodePerTokS : 0,
+          energy,
+          taskPdMs: (prefillS + decodeTotS) * 1000
+        };
+      }
+
+      function normalizeExpCurveRow(row, decodeTokens) {
+        if (
+          Number.isFinite(Number(row.prefill_latency_ms)) &&
+          Number.isFinite(Number(row.decode_throughput_tokens_per_s))
+        ) {
+          return row;
+        }
+        const hasEngine =
+          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+        const q = hasEngine
+          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+        return {
+          ...row,
+          prefill_latency_ms: q.prefillMs,
+          decode_throughput_tokens_per_s: q.decodeTps
+        };
+      }
+
+      function normalizeExpCurveRows(rows, decodeTokens) {
+        return (rows || []).map((r) => normalizeExpCurveRow({ ...r }, decodeTokens));
+      }
+
+      async function runExperimentAndRecordResult() {
+        if (state.experiment.runExperimentBusy) return;
+        state.experiment.runExperimentBusy = true;
+        try {
+          pushMirrorAndExpCoreToMainDom();
+          readExpDraftFromInputs();
+          readConfigFromInputs();
+          applyExperimentDraftCoreToState();
+          renderConfigInputs();
+          copyMainCfgToMirrorInputs();
+          readConfigFromInputs();
+          const tid = state.experiment.selectedTemplate;
+          const templateTitle = EXP_TEMPLATES.find((t) => t.id === tid)?.title || tid;
+          const id = `exp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+          const cfg = buildConfigForSimulation({});
+          const draft = { ...state.experiment.designDraft };
+          let chartType = "curve";
+          let rows = [];
+          let xKey = "link_bandwidth_gbps";
+          let xLabel = "星间互联带宽 (Gbps)";
+          let highlightX = state.config.link_bandwidth_gbps_single;
+          let heatmapSpec = null;
+          const decTok = Math.max(1, Number(state.config.decode_tokens) || 1);
+
+          if (tid === "bandwidth_sweep") {
+            const bwsParsed = parseExpScanList(draft.scan)
+              .map((x) => Math.round(Number(x)))
+              .filter((n) => Number.isFinite(n) && n > 0);
+            const bws = bwsParsed.length ? bwsParsed : [10, 50, 100, 200, 400];
+            try {
+              const ret = await apiPost("/api/simulations/sweep", { config: cfg, bandwidths_gbps: bws });
+              rows = Array.isArray(ret.rows) && ret.rows.length ? ret.rows : [];
+            } catch {
+              rows = mockRows.filter((r) => bws.includes(r.link_bandwidth_gbps));
+              if (!rows.length) rows = mockRows.slice();
+            }
+          } else if (tid === "compute_sweep") {
+            xKey = "single_star_pflops";
+            xLabel = "单星峰值算力 (PFLOPS)";
+            highlightX = state.config.big_star_peak_pflops_single;
+            const ps = parseExpScanList(draft.scan)
+              .map((x) => Number(String(x).trim()))
+              .filter((n) => Number.isFinite(n) && n > 0);
+            const plist = ps.length ? ps : [6, 8, 10, 12, 14];
+            const bw = Math.round(Number(state.config.link_bandwidth_gbps_single));
+            for (const p of plist) {
+              try {
+                const pointCfg = buildConfigForSimulation({ big_star_peak_pflops_single: p });
+                const ret = await apiPost("/api/simulations/single", { config: pointCfg, bandwidth_gbps: bw });
+                const m = ret?.metrics;
+                if (m && Number.isFinite(Number(m.total_latency_s))) rows.push({ single_star_pflops: p, ...m });
+              } catch {
+                /* 单点失败则跳过，后续用示意数据补齐 */
+              }
+            }
+            if (!rows.length) {
+              const baseP = Number(state.config.big_star_peak_pflops_single) || 10;
+              plist.forEach((p) => {
+                rows.push({
+                  single_star_pflops: p,
+                  total_latency_s: (mockRows[2].total_latency_s * baseP) / Math.max(p, 0.1)
+                });
+              });
+            }
+          } else if (tid === "inter_sat_distance") {
+            xKey = "inter_sat_distance_km";
+            xLabel = "星间距离 (km)";
+            const dists = parseExpScanList(draft.scan)
+              .map((x) => Number(String(x).trim()))
+              .filter((n) => Number.isFinite(n) && n > 0);
+            const distList = dists.length ? dists : [5, 10, 20, 50, 100];
+            highlightX = distList[0];
+            const bw = Math.round(Number(state.config.link_bandwidth_gbps_single));
+            for (const dist of distList) {
+              let m = null;
+              try {
+                const pointCfg = buildConfigForSimulation({ inter_sat_distance_km: dist });
+                const ret = await apiPost("/api/simulations/single", { config: pointCfg, bandwidth_gbps: bw });
+                m = ret?.metrics;
+              } catch {
+                m = null;
+              }
+              if (m && Number.isFinite(Number(m.total_latency_s))) {
+                rows.push({ inter_sat_distance_km: dist, ...m });
+              } else {
+                rows.push({ inter_sat_distance_km: dist, total_latency_s: 88 + dist * 0.42 });
+              }
+            }
+          } else if (tid === "model_scale") {
+            chartType = "bar";
+            heatmapSpec = null;
+            xKey = "model";
+            xLabel = "模型类型";
+            highlightX = null;
+            const models = ["Qwen2.5-VL-3B", "Qwen2.5-VL-7B", "Qwen2.5-VL-32B"];
+            const colLabels = ["3B", "7B", "32B"];
+            const restoreModel = draft.model || MODEL_SCALE_BASE_MODEL_ID;
+            const bw = Math.round(Number(state.config.link_bandwidth_gbps_single));
+            rows = [];
+            for (let mi = 0; mi < models.length; mi += 1) {
+              const name = models[mi];
+              let memGb = NaN;
+              try {
+                applyRegistryModel(name);
+                renderConfigInputs();
+                readConfigFromInputs();
+                const c = buildConfigForSimulation({});
+                const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                const m = ret?.metrics;
+                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
+                if (Number.isFinite(v)) memGb = v;
+              } catch {
+                memGb = NaN;
+              }
+              if (!Number.isFinite(memGb)) memGb = 6 + mi * 5;
+              rows.push({
+                model: colLabels[mi],
+                model_name: name,
+                single_star_peak_memory_gb: memGb
+              });
+            }
+            applyRegistryModel(restoreModel);
+            renderConfigInputs();
+            readConfigFromInputs();
+            copyMainCfgToMirrorInputs();
+          } else {
+            rows = mockRows.slice();
+          }
+
+          if (chartType !== "heatmap" && chartType !== "bar") {
+            rows = normalizeExpCurveRows(rows, decTok);
+          }
+
+          state.experiment.completedRuns.unshift({
+            id,
+            title: templateTitle,
+            templateId: tid,
+            templateTitle,
+            chartType,
+            rows,
+            xKey,
+            xLabel,
+            highlightX,
+            heatmapSpec,
+            decodeTokens: decTok,
+            createdAt: Date.now()
+          });
+          state.experiment.selectedResultId = id;
+        } finally {
+          state.experiment.runExperimentBusy = false;
+        }
+        renderAll();
+      }
+
+      function renderExpResultsRunList() {
+        const root = byId("expResultsRunList");
+        if (!root) return;
+        root.innerHTML = buildCompletedRunsListHtml();
+        bindExperimentRunListClicks(root, false);
+      }
+
+      function getSelectedExperimentRun() {
+        const list = state.experiment.completedRuns || [];
+        return list.find((r) => r.id === state.experiment.selectedResultId) || null;
+      }
+
+      function buildExpResultsCsv() {
+        const run = getSelectedExperimentRun();
+        if (!run) return "无数据\n";
+        if (run.chartType === "bar" && run.rows && run.rows.length) {
+          const slim = run.rows.map((r) => ({
+            model_type: r.model,
+            single_star_peak_memory_gb: r.single_star_peak_memory_gb
+          }));
+          return rowsToCsvLines(slim).join("\n");
+        }
+        if (run.chartType === "heatmap" && run.heatmapSpec?.charts?.length) {
+          const { colLabels, rowLabels, charts } = run.heatmapSpec;
+          const esc = (s) => String(s ?? "").replace(/,/g, ";");
+          const lines = [];
+          (charts || []).slice(0, EXP_RESULT_METRIC_SPECS.length).forEach((ch) => {
+            lines.push(`# ${ch.caption || ""}`);
+            lines.push(`col,${(colLabels || []).map(esc).join(",")}`);
+            (ch.matrix || []).forEach((row, j) => {
+              const rl = rowLabels && rowLabels[j] != null ? rowLabels[j] : `row_${j}`;
+              lines.push(`${esc(rl)},${row.map((v) => String(v)).join(",")}`);
+            });
+            lines.push("");
+          });
+          return lines.join("\n").trimEnd();
+        }
+        if (run.chartType === "heatmap" && run.heatmapSpec?.matrix) {
+          const { matrix, colLabels, rowLabels } = run.heatmapSpec;
+          const esc = (s) => String(s ?? "").replace(/,/g, ";");
+          const lines = [`col,${(colLabels || []).map(esc).join(",")}`];
+          (matrix || []).forEach((row, j) => {
+            const rl = rowLabels && rowLabels[j] != null ? rowLabels[j] : `row_${j}`;
+            lines.push(`${esc(rl)},${row.map((v) => String(v)).join(",")}`);
+          });
+          return lines.join("\n");
+        }
+        if (!run.rows || !run.rows.length) return "无数据\n";
+        const yKeys = EXP_RESULT_METRIC_SPECS.map((s) => s.yKey);
+        const xCandidates = [
+          run.xKey,
+          "link_bandwidth_gbps",
+          "single_star_pflops",
+          "inter_sat_distance_km",
+          "model"
+        ].filter(Boolean);
+        const xk =
+          xCandidates.find((k) => run.rows[0] && run.rows[0][k] != null && run.rows[0][k] !== "") ||
+          run.xKey ||
+          "link_bandwidth_gbps";
+        const slim = run.rows.map((r) => {
+          const o = {};
+          if (r[xk] != null) o[xk] = r[xk];
+          yKeys.forEach((yk) => {
+            if (r[yk] != null) o[yk] = r[yk];
+          });
+          return o;
+        });
+        return rowsToCsvLines(slim).join("\n");
+      }
+
+      function renderExperimentResults() {
+        const page = byId("page-experiment-results");
+        if (!page || !page.classList.contains("active")) return;
+        renderExpResultsRunList();
+        const list = state.experiment.completedRuns || [];
+        let run = getSelectedExperimentRun();
+        if (!run && list.length) {
+          state.experiment.selectedResultId = list[0].id;
+          run = list[0];
+          renderExpResultsRunList();
+        }
+        const emptyEl = byId("expResultsEmpty");
+        const detailEl = byId("expResultsDetail");
+        const curveBlock = byId("expResultsCurveBlock");
+        const heatBlock = byId("expResultsHeatmapBlock");
+        const barBlock = byId("expResultsBarBlock");
+        const titleEl = byId("expResultsDetailTitle");
+        if (!run) {
+          if (emptyEl) emptyEl.style.display = "";
+          if (detailEl) detailEl.style.display = "none";
+          return;
+        }
+        if (emptyEl) emptyEl.style.display = "none";
+        if (detailEl) detailEl.style.display = "";
+        if (titleEl) titleEl.textContent = run.title || run.templateTitle || "实验结果";
+        const decTokRun = run.decodeTokens || state.config.decode_tokens || 1;
+        if (run.chartType === "bar" && run.rows && run.rows.length) {
+          if (curveBlock) curveBlock.style.display = "none";
+          if (heatBlock) heatBlock.style.display = "none";
+          if (barBlock) barBlock.style.display = "";
+          const labs = run.rows.map((r) => String(r.model ?? ""));
+          const vals = run.rows.map((r) => Number(r.single_star_peak_memory_gb));
+          drawExpBarChartMemory("expResultBarChart", labs, vals, "单星峰值显存（GB）");
+        } else if (run.chartType === "heatmap" && run.heatmapSpec?.charts?.length) {
+          if (barBlock) barBlock.style.display = "none";
+          if (curveBlock) curveBlock.style.display = "none";
+          if (heatBlock) heatBlock.style.display = "";
+          EXP_RESULT_HEATMAP_CANVAS_IDS.forEach((hid) => {
+            const el = byId(hid);
+            if (!el) return;
+            const pr = prepareHiDPICanvas(el);
+            pr.ctx.fillStyle = "#0a1628";
+            pr.ctx.fillRect(0, 0, pr.width, pr.height);
+          });
+          const { colLabels, rowLabels, charts } = run.heatmapSpec;
+          (charts || []).slice(0, EXP_RESULT_HEATMAP_CANVAS_IDS.length).forEach((ch, i) => {
+            const cid = EXP_RESULT_HEATMAP_CANVAS_IDS[i];
+            if (!cid) return;
+            drawExpHeatmapFromMatrix(cid, ch.matrix, colLabels, rowLabels, ch.caption || "");
+          });
+        } else if (run.chartType === "heatmap" && run.heatmapSpec?.matrix) {
+          if (barBlock) barBlock.style.display = "none";
+          if (curveBlock) curveBlock.style.display = "none";
+          if (heatBlock) heatBlock.style.display = "";
+          EXP_RESULT_HEATMAP_CANVAS_IDS.forEach((hid) => {
+            const el = byId(hid);
+            if (!el) return;
+            const pr = prepareHiDPICanvas(el);
+            pr.ctx.fillStyle = "#0a1628";
+            pr.ctx.fillRect(0, 0, pr.width, pr.height);
+          });
+          drawExpHeatmapFromMatrix(
+            EXP_RESULT_HEATMAP_CANVAS_IDS[0],
+            run.heatmapSpec.matrix,
+            run.heatmapSpec.colLabels,
+            run.heatmapSpec.rowLabels,
+            run.heatmapSpec.caption || ""
+          );
+        } else {
+          if (barBlock) barBlock.style.display = "none";
+          if (curveBlock) curveBlock.style.display = "";
+          if (heatBlock) heatBlock.style.display = "none";
+          const rawRows = run.rows && run.rows.length ? run.rows : mockRows;
+          const norm = rawRows.map((r) => normalizeExpCurveRow({ ...r }, decTokRun));
+          EXP_RESULT_METRIC_SPECS.forEach((spec, i) => {
+            drawLineChart(
+              EXP_RESULT_CURVE_CANVAS_IDS[i],
+              norm,
+              run.xKey || "link_bandwidth_gbps",
+              spec.yKey,
+              spec.yUnit,
+              run.highlightX,
+              run.xLabel,
+              { showPointValues: false }
+            );
+          });
+        }
+      }
+
+      function downloadExpResultsJpg() {
+        const run = getSelectedExperimentRun();
+        if (run && run.chartType === "bar") {
+          const c = byId("expResultBarChart");
+          if (!c || !c.width) return;
+          c.toBlob((blob) => {
+            if (!blob) return;
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "scsp_model_scale_peak_memory.jpg";
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }, "image/jpeg", 0.92);
+          return;
+        }
+        const ids =
+          run && run.chartType === "heatmap"
+            ? EXP_RESULT_HEATMAP_CANVAS_IDS
+            : EXP_RESULT_CURVE_CANVAS_IDS;
+        const canvases = ids.map((id) => byId(id)).filter((c) => c && c.width > 0);
+        if (canvases.length !== 2) return;
+        const gap = 14;
+        const outH = Math.max(canvases[0].height, canvases[1].height);
+        const outW = canvases[0].width + gap + canvases[1].width;
+        const out = document.createElement("canvas");
+        out.width = outW;
+        out.height = outH;
+        const octx = out.getContext("2d");
+        octx.fillStyle = "#0a1628";
+        octx.fillRect(0, 0, outW, outH);
+        octx.drawImage(canvases[0], 0, 0);
+        octx.drawImage(canvases[1], canvases[0].width + gap, 0);
+        out.toBlob((blob) => {
+          if (!blob) return;
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "scsp_experiment_charts.jpg";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }, "image/jpeg", 0.92);
+      }
+
+      function bindExperimentModule() {
+        buildExpTemplateGridOnce();
+        const on = (id, fn) => {
+          const el = byId(id);
+          if (el) el.addEventListener("click", fn);
+        };
+        const clearExperimentCompletedRuns = () => {
+          state.experiment.completedRuns = [];
+          state.experiment.selectedResultId = null;
+          renderExperimentResults();
+          renderExpTaskList();
+        };
+        on("btnExpRefreshList", () => {
+          renderExpTaskList();
+        });
+        on("btnExpTaskListClear", clearExperimentCompletedRuns);
+        on("btnExpSyncFromGlobal", () => {
+          readConfigFromInputs();
+          populateExpDraftFromConfig();
+          writeExpDraftToInputs();
+          readExpDraftFromInputs();
+          updateExpCoreFieldsVisibility();
+          renderExperimentMirrorFromState();
+          state.experiment.mirrorDomReady = true;
+          syncModelStructureVisibility();
+          updateExpTemplateSelectionClass();
+        });
+        on("btnExpStart", async () => {
+          await runExperimentAndRecordResult();
+        });
+        on("btnExpResultsListRefresh", () => {
+          renderExperimentResults();
+          renderExpTaskList();
+        });
+        on("btnExpResultsListClear", clearExperimentCompletedRuns);
+        on("btnExpDownloadCsv", () => {
+          downloadText("scsp_experiment_results.csv", buildExpResultsCsv(), "text/csv;charset=utf-8");
+        });
+        on("btnExpDownloadJpg", () => downloadExpResultsJpg());
+        ["expCfgFormation", "expCfgPflops", "expCfgBw", "expCfgScan"].forEach((id) => {
+          const el = byId(id);
+          if (!el) return;
+          const sync = () => {
+            readExpDraftFromInputs();
+            if (state.experiment.selectedTemplate === "bandwidth_sweep" || state.experiment.selectedTemplate === "compute_sweep") {
+              updateExpCoreFieldsVisibility();
+            }
+            pushMirrorAndExpCoreToMainDom();
+            readConfigFromInputs();
+            renderAll();
+          };
+          el.addEventListener("change", sync);
+          el.addEventListener("input", sync);
+        });
+        const expModelEl = byId("expCfgModel");
+        if (expModelEl) {
+          expModelEl.addEventListener("change", () => {
+            if (state.experiment.selectedTemplate === "model_scale") return;
+            readExpDraftFromInputs();
+            pushMirrorAndExpCoreToMainDom();
+            readConfigFromInputs();
+            applyRegistryModel(expModelEl.value);
+            renderConfigInputs();
+            copyMainCfgToMirrorInputs();
+            readConfigFromInputs();
+            syncModelStructureVisibility();
+            renderAll();
+          });
+        }
+        EXPERIMENT_MIRROR_FIELD_IDS.forEach((cfgId) => {
+          const xel = byId(`x_${cfgId}`);
+          if (!xel) return;
+          const sync = () => {
+            pushMirrorAndExpCoreToMainDom();
+            readConfigFromInputs();
+            renderAll();
+          };
+          xel.addEventListener("change", sync);
+          xel.addEventListener("input", sync);
+        });
+      }
+
+      function renderAll() {
+        if (byId("page-experiment-design")?.classList.contains("active") && state.experiment.mirrorDomReady) {
+          pushMirrorAndExpCoreToMainDom();
+          readConfigFromInputs();
+        }
+        renderScene();
+        renderConstellationTopology();
+        renderConfigSummary();
+        renderConstellationSummary();
+        renderKpi();
+        renderDonut();
+        const bwRows = getBandwidthSensitivityRows();
+        const cpRows = getComputeSensitivityRows();
+        drawLineChart("bwSensitivityChart", bwRows, "link_bandwidth_gbps", "total_latency_s", "任务总时延 (s)", state.config.link_bandwidth_gbps_single);
+        drawLineChart("computeSensitivityChart", cpRows, "single_star_pflops", "total_latency_s", "任务总时延 (s)", state.config.big_star_peak_pflops_single);
+        if (byId("page-experiment-design")?.classList.contains("active")) renderExperimentDesign();
+        if (byId("page-experiment-results")?.classList.contains("active")) renderExperimentResults();
+      }
+
+      function showResult(obj) {
+        state.lastResult = obj;
+        if (obj && Array.isArray(obj.rows) && obj.rows.length) {
+          state.sweepRows = obj.rows;
+        }
+        if (obj && obj.mode === "single" && obj.metrics) {
+          readConfigFromInputs();
+          state.kpiOverviewRow = metricsResponseToKpiRow(
+            obj,
+            state.config.link_bandwidth_gbps_single,
+            state.config.big_star_peak_pflops_single
+          );
+          /* 单点仿真成功时也要展示概览 KPI/圆环；此前仅「敏感性扫描」会置 true，导致单点跑完界面仍像无结果 */
+          if (state.kpiOverviewRow) {
+            state.overviewResultsDisplayed = true;
+          }
+        }
+        const output = JSON.stringify(obj, null, 2);
+        const dbg = byId("resultBoxDebug");
+        if (dbg) dbg.textContent = output;
+        renderAll();
+      }
+
+      function downloadText(filename, text, mime) {
+        const blob = new Blob([text], { type: mime });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function bindPerformanceTabs() {
+        const tabs = Array.from(document.querySelectorAll("[data-perf-tab]"));
+        const panels = {
+          decompose: byId("perf-panel-decompose"),
+          bandwidth: byId("perf-panel-bandwidth"),
+          compute: byId("perf-panel-compute")
+        };
+        tabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            const key = tab.dataset.perfTab;
+            tabs.forEach((t) => t.classList.toggle("active", t === tab));
+            Object.entries(panels).forEach(([k, el]) => el.classList.toggle("active", k === key));
+            // 切换到可见面板后按当前尺寸重绘，避免隐藏状态下绘制造成清晰度不一致。
+            renderAll();
+          });
+        });
+      }
+
+      function buildConfigForSimulation(extra) {
+        readConfigFromInputs();
+        const c = { ...state.config, ...extra };
+        c.big_star_peak_pflops = Number(c.big_star_peak_pflops_single);
+        c.link_bandwidth_gbps = Number(c.link_bandwidth_gbps_single);
+        return c;
+      }
+
+      async function runSensitivityExperiments() {
+        readConfigFromInputs();
+        const singleBw = Math.round(Number(state.config.link_bandwidth_gbps_single));
+        const singleP = Number(state.config.big_star_peak_pflops_single);
+        const sweepBws = (state.config.link_bandwidth_gbps_sweep || []).map((n) => Math.round(Number(n))).filter((n) => Number.isFinite(n) && n > 0);
+        const sweepPs = (state.config.big_star_peak_pflops_sweep || []).map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
+
+        state.kpiOverviewRow = null;
+
+        try {
+          const kpiCfg = buildConfigForSimulation({});
+          const kpiRet = await apiPost("/api/simulations/single", {
+            config: kpiCfg,
+            bandwidth_gbps: singleBw
+          });
+          state.kpiOverviewRow = metricsResponseToKpiRow(kpiRet, singleBw, singleP);
+        } catch {
+          state.kpiOverviewRow = null;
+        }
+
+        const cfgForSweep = buildConfigForSimulation({});
+        try {
+          const bwRet = await apiPost("/api/simulations/sweep", {
+            config: cfgForSweep,
+            bandwidths_gbps: sweepBws.length ? sweepBws : [10, 50, 100, 200, 400]
+          });
+          state.bandwidthSensitivityRows = Array.isArray(bwRet.rows) && bwRet.rows.length ? bwRet.rows : [];
+          state.sweepRows = state.bandwidthSensitivityRows;
+        } catch {
+          state.bandwidthSensitivityRows = [];
+          state.sweepRows = [];
+        }
+
+        const rows = [];
+        const bwForCompute = singleBw;
+        const pList = sweepPs.length ? sweepPs : [0.6, 0.8, 1.0, 1.2, 1.4].map((f) => +(singleP * f).toFixed(3));
+        for (const point of pList) {
+          const p = Number(point);
+          if (!Number.isFinite(p) || p <= 0) continue;
+          try {
+            const pointCfg = buildConfigForSimulation({ big_star_peak_pflops_single: p });
+            const ret = await apiPost("/api/simulations/single", { config: pointCfg, bandwidth_gbps: bwForCompute });
+            const latency = ret?.metrics?.total_latency_s;
+            if (Number.isFinite(latency)) {
+              rows.push({ single_star_pflops: p, total_latency_s: Number(latency) });
+            }
+          } catch {
+            // ignore failed point
+          }
+        }
+        state.computeSensitivityRows = rows.sort((a, b) => a.single_star_pflops - b.single_star_pflops);
+      }
+
+      function syncMainOverviewMode() {
+        const main = byId("mainRoot");
+        if (!main) return;
+        const overviewActive = byId("page-overview") && byId("page-overview").classList.contains("active");
+        main.classList.toggle("main--overview", overviewActive);
+      }
+
+      function bindNavigation() {
+        const titleMap = {
+          overview: "概览",
+          constellation: "星座构型配置",
+          model: "模型部署配置",
+          compute: "算力节点配置",
+          link: "通信链路配置",
+          application: "天基应用配置",
+          "experiment-design": "实验设计",
+          "experiment-results": "实验结果"
+        };
+        const buttons = Array.from(document.querySelectorAll(".nav-btn"));
+        buttons.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const page = btn.dataset.page;
+            const wasExpDesign = byId("page-experiment-design")?.classList.contains("active");
+            buttons.forEach((b) => b.classList.toggle("active", b === btn));
+            document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+            const target = byId(`page-${page}`);
+            if (target) target.classList.add("active");
+            byId("pageTitle").textContent = titleMap[page] || "SCSP 仿真平台";
+            syncMainOverviewMode();
+            if (wasExpDesign && page !== "experiment-design") {
+              pushMirrorAndExpCoreToMainDom();
+              readConfigFromInputs();
+              state.experiment.mirrorDomReady = false;
+            }
+            state.experiment.shouldHydrateMirror = page === "experiment-design";
+            renderAll();
+          });
+        });
+      }
+
+      function bindConfigInputs() {
+        const ids = [
+          "cfgRemoteAlt", "cfgComputeAlt", "cfgComputeCount", "cfgInterSatDistance",
+          "cfgModelName", "cfgModelParams", "cfgActiveModelParams", "cfgModelType", "cfgStructureType",
+          "cfgLlmNumHiddenLayers", "cfgLlmHiddenSize", "cfgLlmIntermediateSize", "cfgLlmAttentionHeads", "cfgLlmKvHeads",
+          "cfgVisionDepth", "cfgVisionHiddenSize", "cfgVisionPatchSize", "cfgVisionSpatialMerge", "cfgVisionOutHiddenSize",
+          "cfgStageSplit", "cfgFlops", "cfgPrefillMemoryGB", "cfgDecodeFlopsPerToken", "cfgDecodeMemoryGB", "cfgPrefillInterStageTransfer", "cfgDecodeInterStageTransfer", "cfgImageResolution", "cfgTileSize", "cfgDecodeTokens",
+          "cfgPeakPflopsSingle", "cfgPeakPflopsSweep", "cfgPrefillComputeUtil", "cfgPrefillMemoryUtil", "cfgDecodeComputeUtil", "cfgDecodeMemoryUtil", "cfgMemoryBandwidthTBps", "cfgPowerLimit", "cfgVram",
+          "cfgBandwidthSingle", "cfgBandwidthSweep", "cfgLinkModeComputeInter", "cfgLinkModeRemoteCompute"
+        ];
+        const triggerRunSweepOnEnter = (event) => {
+          if (event.key !== "Enter" || event.isComposing) return;
+          event.preventDefault();
+          const overviewBtn = document.querySelector('.nav-btn[data-page="overview"]');
+          if (overviewBtn) overviewBtn.click();
+          byId("btnRunSweep").click();
+        };
+        ids.forEach((id) => {
+          const onConfigValueChanged = () => {
+            readConfigFromInputs();
+            renderAll();
+          };
+          const el = byId(id);
+          el.addEventListener("input", onConfigValueChanged);
+          el.addEventListener("change", onConfigValueChanged);
+          if (el.tagName !== "TEXTAREA") el.addEventListener("keydown", triggerRunSweepOnEnter);
+        });
+        byId("cfgModelName").addEventListener("change", () => {
+          applyRegistryModel(byId("cfgModelName").value);
+          renderConfigInputs();
+          readConfigFromInputs();
+          renderAll();
+        });
+        byId("cfgModelType").addEventListener("change", () => {
+          syncModelStructureVisibility();
+          readConfigFromInputs();
+          renderAll();
+        });
+      }
+
+      byId("btnRunSingle").onclick = async () => {
+        try {
+          readConfigFromInputs();
+          const bw = Math.round(Number(state.config.link_bandwidth_gbps_single));
+          const cfg = buildConfigForSimulation({});
+          const ret = await apiPost("/api/simulations/single", { config: cfg, bandwidth_gbps: bw });
+          showResult(ret);
+        } catch (e) {
+          showResult({ error: String(e) });
+        }
+      };
+      byId("btnRunSweep").onclick = async () => {
+        try {
+          const overviewBtn = document.querySelector('.nav-btn[data-page="overview"]');
+          if (overviewBtn) overviewBtn.click();
+          readConfigFromInputs();
+          await runSensitivityExperiments();
+          state.overviewResultsDisplayed = true;
+          const ret = {
+            mode: "overview_sensitivity",
+            bandwidth_rows: getBandwidthSensitivityRows(),
+            compute_rows: getComputeSensitivityRows()
+          };
+          showResult(ret);
+        } catch {
+          state.overviewResultsDisplayed = true;
+          readConfigFromInputs();
+          const sbw = state.config.link_bandwidth_gbps_single;
+          const sp = state.config.big_star_peak_pflops_single;
+          state.kpiOverviewRow = mockRows.find((r) => r.link_bandwidth_gbps === sbw) || mockRows[Math.min(2, mockRows.length - 1)];
+          state.sweepRows = mockRows;
+          state.bandwidthSensitivityRows = mockRows;
+          state.computeSensitivityRows = [];
+          showResult({ warning: "后端接口不可用，已回退 mock 数据。" });
+          renderAll();
+        }
+      };
+      byId("btnSaveExperiment").onclick = async () => {
+        try {
+          readConfigFromInputs();
+          const ret = await apiPost("/api/experiments/run", { config: state.config, template_name: "bandwidth_sensitivity" });
+          showResult(ret);
+        } catch (e) {
+          showResult({ error: String(e) });
+        }
+      };
+
+      (async function init() {
+        await loadModelRegistry();
+        applyRegistryModel(state.config.model_name);
+        bindNavigation();
+        syncMainOverviewMode();
+        bindPerformanceTabs();
+        renderConfigInputs();
+        bindConfigInputs();
+        bindExperimentModule();
+        readConfigFromInputs();
+        try {
+          const health = await apiGet("/api/health");
+          byId("healthText").textContent = `API 状态：${health.status || "ok"}`;
+        } catch {
+          byId("healthText").textContent = "API 状态：不可用（已启用 mock 展示）";
+        }
+        state.overviewResultsDisplayed = false;
+        state.sweepRows = [];
+        state.bandwidthSensitivityRows = [];
+        state.computeSensitivityRows = [];
+        state.kpiOverviewRow = null;
+        state.lastResult = null;
+        renderAll();
+      })();
+    </script>
+  </body>
+</html>
