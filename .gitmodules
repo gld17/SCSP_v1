@@ -1,0 +1,6 @@
+[submodule "astra-sim"]
+	path = astra-sim
+	url = https://github.com/gld17/astra-sim.git
+[submodule "stage"]
+	path = stage
+	url = https://github.com/gld17/stage.git
