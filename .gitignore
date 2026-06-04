@@ -8,3 +8,9 @@ workload-*
 comm_size
 tensor_size
 stats
+
+# Runtime outputs
+experiments/
+log/
+outputs/
+results/
