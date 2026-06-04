@@ -35,7 +35,7 @@ class RunExperimentRequest(BaseModel):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="SCSP API", version="0")
+    app = FastAPI(title="SCSP API", version="v1")
     web_root = Path(__file__).resolve().parents[1] / "web"
     assets_root = Path(__file__).resolve().parents[1] / "assets"
     configs_root = Path(__file__).resolve().parents[1] / "configs"

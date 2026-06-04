@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Literal, Optional
 from .engine import run_simulation, run_sweep, validate_bandwidth_input
 from .io_utils import write_json
 
-ENGINE_VERSION = "v0"
+ENGINE_VERSION = "v1"
 
 
 def _now_iso() -> str:

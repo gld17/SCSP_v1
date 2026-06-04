@@ -67,6 +67,8 @@ class V1SimulationConfig:
     stage_split_ratio: float = 0.5
     fixed_sync_overhead_ms: float = 0.0
     inter_sat_distance_km: float = 10.0
+    activation_load_store_ratio: float = 1.0
+    local_mem_latency_ns: float = 0.0
 
     @property
     def image_wh(self) -> Tuple[int, int]:
@@ -171,6 +173,9 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
     normalized.setdefault("stage_split_ratio", 0.5)
     normalized.setdefault("fixed_sync_overhead_ms", 0.0)
     normalized.setdefault("inter_sat_distance_km", 10.0)
+    normalized.setdefault("activation_load_store_ratio", 1.0)
+    normalized.setdefault("local_mem_latency_ns", 0.0)
+    normalized.pop("simulation_mode", None)
     normalized.setdefault("mixed_precision", False)
     normalized.setdefault("dp", 1)
     normalized.setdefault("tp", 1)
@@ -290,6 +295,8 @@ def build_simulation_config(raw: Dict[str, Any], link_bandwidth_gbps: float) -> 
         stage_split_ratio=float(normalized["stage_split_ratio"]),
         fixed_sync_overhead_ms=float(normalized["fixed_sync_overhead_ms"]),
         inter_sat_distance_km=float(normalized["inter_sat_distance_km"]),
+        activation_load_store_ratio=float(normalized.get("activation_load_store_ratio", 1.0)),
+        local_mem_latency_ns=float(normalized.get("local_mem_latency_ns", 0.0)),
     )
 
 
@@ -333,4 +340,6 @@ def dump_config_dict(config: V1SimulationConfig) -> Dict[str, Any]:
         "stage_split_ratio": config.stage_split_ratio,
         "fixed_sync_overhead_ms": config.fixed_sync_overhead_ms,
         "inter_sat_distance_km": config.inter_sat_distance_km,
+        "activation_load_store_ratio": config.activation_load_store_ratio,
+        "local_mem_latency_ns": config.local_mem_latency_ns,
     }

@@ -13,7 +13,7 @@ from scsp.visualization import plot_sweep_latency
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run SCSP v0 simulation (single or sweep)")
+    parser = argparse.ArgumentParser(description="Run SCSP v1 simulation (single or sweep)")
     parser.add_argument(
         "--config",
         required=True,
