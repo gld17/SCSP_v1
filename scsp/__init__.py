@@ -6,7 +6,6 @@ __all__ = [
     "experiment",
     "web_api",
     "config",
-    "simulator",
     "engine",
     "models",
 ]
