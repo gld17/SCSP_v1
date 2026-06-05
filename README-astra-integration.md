@@ -41,31 +41,33 @@ astra-sim/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Aware
 
 ## Unsupported Metrics
 
-ASTRA-sim currently runs the full Chakra execution graph as an event-driven simulation. It reports aggregate wall, GPU, communication, and overlap times, but it does not distinguish SCSP's old analytical prefill/decode pipeline stages. These `SimulationMetrics` fields are therefore unsupported and returned as placeholder values, with field names listed in `unsupported_fields`:
-
-- `data_tx_latency_s`
-- `inter_stage_latency_s`
-- `stage1_compute_latency_s`
-- `stage2_compute_latency_s`
-- `decode_latency_s_per_token`
-- `decode_total_latency_s`
-- `decode_compute_latency_s_per_token`
-- `decode_memory_latency_s_per_token`
-- `decode_effective_compute_pflops`
-- `decode_bottleneck`
-- `prefill_compute_time_s`
-- `prefill_memory_time_s`
-- `prefill_time_s`
-- `prefill_bottleneck`
-- `decode_energy_efficiency_tokens_per_j`
-- `total_inference_time_s`
-- `prefill_peak_memory_bytes`
-- `prefill_peak_memory_gb`
-- `single_star_peak_memory_bytes`
-- `single_star_peak_memory_gb`
-- `prefill_weight_memory_bytes`
-- `prefill_kv_memory_bytes`
-- `prefill_activation_peak_memory_bytes`
-- `prefill_workspace_memory_bytes`
+ASTRA-sim currently runs the full Chakra execution graph as an event-driven simulation. It reports aggregate wall, GPU, communication, and overlap times, but it does not distinguish SCSP's old analytical prefill/decode pipeline stages. The legacy metrics that were previously returned as placeholders are documented in [Legacy Metrics Reference](#legacy-metrics-reference) above.
 
 Extending these metrics requires either splitting or annotating the stage-generated ET by phase, or adding new phase-aware counters inside ASTRA-sim.
+
+## Legacy Metrics Reference
+
+The following fields were previously part of `SimulationMetrics` but have been removed from the codebase because they are not produced by ASTRA-sim. They are preserved here for reference in future iterations that may reintroduce phase-aware simulation or analytical decomposition.
+
+- `data_tx_latency_s` — Data transmission latency between pipeline stages.
+- `inter_stage_latency_s` — Inter-stage communication latency.
+- `stage1_compute_latency_s` — Compute latency of the first pipeline stage.
+- `stage2_compute_latency_s` — Compute latency of the second pipeline stage.
+- `decode_latency_s_per_token` — Per-token decode latency.
+- `decode_total_latency_s` — Total decode latency across all tokens.
+- `decode_compute_latency_s_per_token` — Per-token decode compute latency.
+- `decode_memory_latency_s_per_token` — Per-token decode memory latency.
+- `decode_effective_compute_pflops` — Decode-phase effective compute throughput.
+- `decode_bottleneck` — Bottleneck identifier for the decode phase.
+- `prefill_compute_time_s` — Prefill compute time.
+- `prefill_memory_time_s` — Prefill memory time.
+- `prefill_time_s` — Total prefill time.
+- `prefill_bottleneck` — Bottleneck identifier for the prefill phase.
+- `decode_energy_efficiency_tokens_per_j` — Decode energy efficiency in tokens per joule.
+- `total_inference_time_s` — Total end-to-end inference time.
+- `prefill_peak_memory_bytes` / `prefill_peak_memory_gb` — Peak memory during prefill.
+- `single_star_peak_memory_bytes` / `single_star_peak_memory_gb` — Peak memory per star.
+- `prefill_weight_memory_bytes` — Weight memory during prefill.
+- `prefill_kv_memory_bytes` — KV-cache memory during prefill.
+- `prefill_activation_peak_memory_bytes` — Activation peak memory during prefill.
+- `prefill_workspace_memory_bytes` — Workspace memory during prefill.

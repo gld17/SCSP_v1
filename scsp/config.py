@@ -41,8 +41,23 @@ class V1SimulationConfig:
     image_type: Literal["RGB", "SAR"] = "RGB"
 
     # Task and system settings.
-    num_images: int = 1
+    batch: int = 1
     decode_tokens: int = 1
+    sp: int = 1
+    ep: int = 1
+    vision_dp: int = 1
+    vision_tp: int = 1
+    vision_pp: int = 1
+    vision_ep: int = 1
+    text_dp: int = 1
+    text_tp: int = 1
+    text_pp: int = 1
+    text_ep: int = 1
+    weight_sharded: bool = False
+    activation_recompute: bool = False
+    chakra_schema_version: str = "v0.0.1"
+    print_gpu_vram: bool = False
+    include_backward: bool = False
     channels: int = 3
     bytes_per_pixel: int = 2
     big_star_peak_pflops: float = 10.0
@@ -55,12 +70,6 @@ class V1SimulationConfig:
     prefill_memory_bytes_per_patch: float = 5.0e10
     decode_flops_per_token: float = 1.435e11
     decode_memory_bytes_per_token: float = 1.0e8
-    llm_num_hidden_layers: int = 80
-    llm_hidden_size: int = 8192
-    llm_num_attention_heads: int = 64
-    llm_num_key_value_heads: int = 8
-    vision_patch_size: int = 14
-    vision_spatial_merge_size: int = 2
     inter_sat_latency_target_ms: float = 1.0
     peak_power_limit_kw: float = 20.0
     single_star_compute_payload_power_w: float = 20000.0
@@ -91,7 +100,8 @@ def load_config(path: str | Path) -> V1SimulationConfig:
             legacy = float(raw["inter_stage_transfer_mb"])
             raw.setdefault("prefill_inter_stage_transfer_mb", legacy)
             raw.setdefault("decode_inter_stage_transfer_kb", legacy * 1000.0)
-    return V1SimulationConfig(**raw)
+    link_bandwidth_gbps = float(raw.get("link_bandwidth_gbps", 100.0))
+    return build_simulation_config(raw, link_bandwidth_gbps)
 
 
 def _to_param_count(raw_value: Any, fallback: float) -> float:
@@ -126,7 +136,7 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
     normalized.setdefault("model_name", "Qwen2.5-VL-7B")
     normalized.setdefault("model_params", "7B")
     normalized.setdefault("flops_per_sample", 5e13)
-    normalized.setdefault("num_images", 1)
+    normalized.setdefault("batch", 1)
     normalized.setdefault("image_resolution", "512x512")
     normalized.setdefault("decode_tokens", 1)
     normalized.setdefault("big_star_peak_pflops", 10.0)
@@ -153,17 +163,6 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
         "resident_parameter_count",
         _to_param_count(parameter_count.get("resident_unit", parameter_count.get("unit")), default_resident),
     )
-    llm = model_structure.get("llm", {}) if isinstance(model_structure, dict) else {}
-    normalized.setdefault("llm_num_hidden_layers", int(llm.get("num_hidden_layers", 80) or 80))
-    normalized.setdefault("llm_hidden_size", int(llm.get("hidden_size", 8192) or 8192))
-    normalized.setdefault("llm_num_attention_heads", int(llm.get("num_attention_heads", 64) or 64))
-    normalized.setdefault("llm_num_key_value_heads", int(llm.get("num_key_value_heads", 8) or 8))
-    vision = model_structure.get("vision", {}) if isinstance(model_structure, dict) else {}
-    normalized.setdefault("vision_patch_size", int(vision.get("patch_size", 14) or 14))
-    normalized.setdefault(
-        "vision_spatial_merge_size",
-        int(vision.get("spatial_merge_size", 2) or 2),
-    )
     normalized.setdefault("inter_sat_latency_target_ms", 1.0)
     normalized.setdefault("peak_power_limit_kw", 20.0)
     normalized.setdefault(
@@ -180,6 +179,21 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
     normalized.setdefault("dp", 1)
     normalized.setdefault("tp", 1)
     normalized.setdefault("pp", 1)
+    normalized.setdefault("sp", 1)
+    normalized.setdefault("ep", 1)
+    normalized.setdefault("vision_dp", 1)
+    normalized.setdefault("vision_tp", 1)
+    normalized.setdefault("vision_pp", 1)
+    normalized.setdefault("vision_ep", 1)
+    normalized.setdefault("text_dp", 1)
+    normalized.setdefault("text_tp", 1)
+    normalized.setdefault("text_pp", 1)
+    normalized.setdefault("text_ep", 1)
+    normalized.setdefault("weight_sharded", False)
+    normalized.setdefault("activation_recompute", False)
+    normalized.setdefault("chakra_schema_version", "v0.0.1")
+    normalized.setdefault("print_gpu_vram", False)
+    normalized.setdefault("include_backward", False)
     normalized.setdefault("local_mem_bw_gbps", 3350.0)
 
     if "prefill_inter_stage_transfer_mb" not in normalized or "decode_inter_stage_transfer_kb" not in normalized:
@@ -230,18 +244,6 @@ def validate_raw_config(raw: Dict[str, Any]) -> None:
         raise ValueError("active_parameter_count must be <= resident_parameter_count")
     if float(raw.get("single_star_compute_payload_power_w", 0)) <= 0:
         raise ValueError("single_star_compute_payload_power_w must be positive")
-    if int(raw.get("llm_num_hidden_layers", 80)) <= 0:
-        raise ValueError("llm_num_hidden_layers must be positive")
-    if int(raw.get("llm_hidden_size", 8192)) <= 0:
-        raise ValueError("llm_hidden_size must be positive")
-    if int(raw.get("llm_num_attention_heads", 64)) <= 0:
-        raise ValueError("llm_num_attention_heads must be positive")
-    if int(raw.get("llm_num_key_value_heads", 8)) <= 0:
-        raise ValueError("llm_num_key_value_heads must be positive")
-    if int(raw.get("vision_patch_size", 14)) <= 0:
-        raise ValueError("vision_patch_size must be positive")
-    if int(raw.get("vision_spatial_merge_size", 2)) <= 0:
-        raise ValueError("vision_spatial_merge_size must be positive")
     if int(raw.get("decode_tokens", 1)) < 1:
         raise ValueError("decode_tokens must be a positive integer")
     if float(raw.get("prefill_inter_stage_transfer_mb", 0)) < 0:
@@ -269,8 +271,23 @@ def build_simulation_config(raw: Dict[str, Any], link_bandwidth_gbps: float) -> 
         active_parameter_count=float(normalized["active_parameter_count"]),
         resident_parameter_count=float(normalized["resident_parameter_count"]),
         image_type=image_type,
-        num_images=int(normalized["num_images"]),
+        batch=int(normalized["batch"]),
         decode_tokens=int(normalized["decode_tokens"]),
+        sp=int(normalized["sp"]),
+        ep=int(normalized["ep"]),
+        vision_dp=int(normalized["vision_dp"]),
+        vision_tp=int(normalized["vision_tp"]),
+        vision_pp=int(normalized["vision_pp"]),
+        vision_ep=int(normalized["vision_ep"]),
+        text_dp=int(normalized["text_dp"]),
+        text_tp=int(normalized["text_tp"]),
+        text_pp=int(normalized["text_pp"]),
+        text_ep=int(normalized["text_ep"]),
+        weight_sharded=bool(normalized["weight_sharded"]),
+        activation_recompute=bool(normalized["activation_recompute"]),
+        chakra_schema_version=str(normalized["chakra_schema_version"]),
+        print_gpu_vram=bool(normalized["print_gpu_vram"]),
+        include_backward=bool(normalized["include_backward"]),
         channels=int(image_defaults["channels"]),
         bytes_per_pixel=int(image_defaults["bytes_per_pixel"]),
         big_star_peak_pflops=float(normalized["big_star_peak_pflops"]),
@@ -283,12 +300,6 @@ def build_simulation_config(raw: Dict[str, Any], link_bandwidth_gbps: float) -> 
         prefill_memory_bytes_per_patch=float(normalized["prefill_memory_bytes_per_patch"]),
         decode_flops_per_token=float(normalized["decode_flops_per_token"]),
         decode_memory_bytes_per_token=float(normalized["decode_memory_bytes_per_token"]),
-        llm_num_hidden_layers=int(normalized["llm_num_hidden_layers"]),
-        llm_hidden_size=int(normalized["llm_hidden_size"]),
-        llm_num_attention_heads=int(normalized["llm_num_attention_heads"]),
-        llm_num_key_value_heads=int(normalized["llm_num_key_value_heads"]),
-        vision_patch_size=int(normalized["vision_patch_size"]),
-        vision_spatial_merge_size=int(normalized["vision_spatial_merge_size"]),
         inter_sat_latency_target_ms=float(normalized["inter_sat_latency_target_ms"]),
         peak_power_limit_kw=float(normalized["peak_power_limit_kw"]),
         single_star_compute_payload_power_w=float(normalized["single_star_compute_payload_power_w"]),
@@ -314,8 +325,23 @@ def dump_config_dict(config: V1SimulationConfig) -> Dict[str, Any]:
         "decode_inter_stage_transfer_kb": config.decode_inter_stage_transfer_kb,
         "flops_per_sample": config.flops_per_sample,
         "peak_vram_gb": config.peak_vram_gb,
-        "num_images": config.num_images,
+        "batch": config.batch,
         "decode_tokens": config.decode_tokens,
+        "sp": config.sp,
+        "ep": config.ep,
+        "vision_dp": config.vision_dp,
+        "vision_tp": config.vision_tp,
+        "vision_pp": config.vision_pp,
+        "vision_ep": config.vision_ep,
+        "text_dp": config.text_dp,
+        "text_tp": config.text_tp,
+        "text_pp": config.text_pp,
+        "text_ep": config.text_ep,
+        "weight_sharded": config.weight_sharded,
+        "activation_recompute": config.activation_recompute,
+        "chakra_schema_version": config.chakra_schema_version,
+        "print_gpu_vram": config.print_gpu_vram,
+        "include_backward": config.include_backward,
         "channels": config.channels,
         "bytes_per_pixel": config.bytes_per_pixel,
         "big_star_peak_pflops": config.big_star_peak_pflops,
@@ -328,12 +354,6 @@ def dump_config_dict(config: V1SimulationConfig) -> Dict[str, Any]:
         "prefill_memory_bytes_per_patch": config.prefill_memory_bytes_per_patch,
         "decode_flops_per_token": config.decode_flops_per_token,
         "decode_memory_bytes_per_token": config.decode_memory_bytes_per_token,
-        "llm_num_hidden_layers": config.llm_num_hidden_layers,
-        "llm_hidden_size": config.llm_hidden_size,
-        "llm_num_attention_heads": config.llm_num_attention_heads,
-        "llm_num_key_value_heads": config.llm_num_key_value_heads,
-        "vision_patch_size": config.vision_patch_size,
-        "vision_spatial_merge_size": config.vision_spatial_merge_size,
         "inter_sat_latency_target_ms": config.inter_sat_latency_target_ms,
         "peak_power_limit_kw": config.peak_power_limit_kw,
         "single_star_compute_payload_power_w": config.single_star_compute_payload_power_w,

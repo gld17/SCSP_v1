@@ -29,34 +29,6 @@ ASTRA_SIM_BIN = (
 RESULT_PREFIX = "ASTRA_SIM_RESULT:"
 
 
-UNSUPPORTED_FIELDS = [
-    "data_tx_latency_s",
-    "inter_stage_latency_s",
-    "stage1_compute_latency_s",
-    "stage2_compute_latency_s",
-    "decode_latency_s_per_token",
-    "decode_total_latency_s",
-    "decode_compute_latency_s_per_token",
-    "decode_memory_latency_s_per_token",
-    "decode_effective_compute_pflops",
-    "decode_bottleneck",
-    "prefill_compute_time_s",
-    "prefill_memory_time_s",
-    "prefill_time_s",
-    "prefill_bottleneck",
-    "decode_energy_efficiency_tokens_per_j",
-    "total_inference_time_s",
-    "prefill_peak_memory_bytes",
-    "prefill_peak_memory_gb",
-    "single_star_peak_memory_bytes",
-    "single_star_peak_memory_gb",
-    "prefill_weight_memory_bytes",
-    "prefill_kv_memory_bytes",
-    "prefill_activation_peak_memory_bytes",
-    "prefill_workspace_memory_bytes",
-]
-
-
 def _safe_slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_.-]+", "_", value.strip())
     return slug.strip("._-") or "scsp_model"
@@ -111,6 +83,19 @@ def _positive_int(config: Dict[str, Any], key: str, default: int = 1) -> int:
     return value
 
 
+def _max_dimension(value: Any, default: int) -> int:
+    text = str(value or "")
+    parts = text.lower().split("x")
+    if len(parts) != 2:
+        return default
+    try:
+        dims = [int(parts[0]), int(parts[1])]
+    except ValueError:
+        return default
+    positive_dims = [dim for dim in dims if dim > 0]
+    return max(positive_dims) if positive_dims else default
+
+
 def _run_stage(
     config: Dict[str, Any],
     model_params: Dict[str, Any],
@@ -119,21 +104,41 @@ def _run_stage(
     output_prefix: str,
 ) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    dp = _positive_int(config, "dp", 1)
-    tp = _positive_int(config, "tp", 1)
-    pp = _positive_int(config, "pp", 1)
-
     cmd = [
         str(SEESPACE_PYTHON),
         "main.py",
         "--model_name",
         stage_model_name,
+        "--batch",
+        str(config.get("batch", 1)),
+        "--seq",
+        str(config.get("decode_tokens", 1)),
         "--dp",
-        str(dp),
+        str(config.get("dp", 1)),
         "--tp",
-        str(tp),
+        str(config.get("tp", 1)),
+        "--sp",
+        str(config.get("sp", 1)),
+        "--ep",
+        str(config.get("ep", 1)),
         "--pp",
-        str(pp),
+        str(config.get("pp", 1)),
+        "--vision_dp",
+        str(config.get("vision_dp", 1)),
+        "--vision_tp",
+        str(config.get("vision_tp", 1)),
+        "--vision_pp",
+        str(config.get("vision_pp", 1)),
+        "--vision_ep",
+        str(config.get("vision_ep", 1)),
+        "--text_dp",
+        str(config.get("text_dp", 1)),
+        "--text_tp",
+        str(config.get("text_tp", 1)),
+        "--text_pp",
+        str(config.get("text_pp", 1)),
+        "--text_ep",
+        str(config.get("text_ep", 1)),
         "--output_dir",
         str(output_dir),
         "--output_name",
@@ -145,6 +150,25 @@ def _run_stage(
     model_type = model_params.get("model_type")
     if model_type:
         cmd.extend(["--model_type", str(model_type)])
+    cmd.extend(
+        [
+            "--vision_image_size",
+            str(_max_dimension(config.get("image_resolution"), 1)),
+            "--vision_patch_size",
+            str(_max_dimension(config.get("tile_size"), 1)),
+        ]
+    )
+    if config.get("weight_sharded"):
+        cmd.extend(["--weight_sharded", "true"])
+    if config.get("activation_recompute"):
+        cmd.extend(["--activation_recompute", "true"])
+    chakra_schema_version = config.get("chakra_schema_version")
+    if chakra_schema_version:
+        cmd.extend(["--chakra_schema_version", str(chakra_schema_version)])
+    if config.get("print_gpu_vram"):
+        cmd.extend(["--print_gpu_vram", "true"])
+    if config.get("include_backward"):
+        cmd.append("--include_backward")
 
     result = subprocess.run(
         cmd,
@@ -277,24 +301,21 @@ def _run_astra(
 def _map_metrics(config: Dict[str, Any], astra_result: Dict[str, int]) -> Dict[str, Any]:
     wall_time_ns = int(astra_result["wall_time_ns"])
     gpu_time_ns = int(astra_result["gpu_time_ns"])
+    comm_time_ns = int(astra_result["comm_time_ns"])
     total_latency_s = wall_time_ns / 1e9
     ideal_peak_pflops = float(config.get("big_star_peak_pflops", 10.0))
     compute_utilization = (gpu_time_ns / wall_time_ns) if wall_time_ns else 0.0
     effective_compute_pflops = ideal_peak_pflops * compute_utilization
+    bottleneck_stage = "communication" if gpu_time_ns and (comm_time_ns / gpu_time_ns) > 0.5 else "compute"
 
     metrics = SimulationMetrics(
-        total_samples=int(config.get("num_images", 1)),
+        total_samples=int(config.get("batch", 1)),
         total_latency_s=total_latency_s,
-        data_tx_latency_s=0.0,
-        inter_stage_latency_s=0.0,
-        stage1_compute_latency_s=0.0,
-        stage2_compute_latency_s=0.0,
         effective_compute_flops=effective_compute_pflops * 1e15,
         effective_compute_pflops=effective_compute_pflops,
         ideal_peak_pflops=ideal_peak_pflops,
         compute_utilization=compute_utilization,
-        bottleneck_stage="unknown",
-        total_inference_time_s=total_latency_s,
+        bottleneck_stage=bottleneck_stage,
     )
     return asdict(metrics)
 
@@ -341,7 +362,6 @@ def run_astra_simulation(
         "mode": "single",
         "config": normalized,
         "metrics": metrics,
-        "unsupported_fields": list(UNSUPPORTED_FIELDS),
         "astra_sim_result": astra_result,
         "artifacts": {
             "stage_output_dir": str(output_dir),
