@@ -1,0 +1,1123 @@
+Reading prompt from stdin...
+OpenAI Codex v0.135.0
+--------
+workdir: /share/guolidong-nfs/SeeSpace/SCSP_v1
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: medium
+reasoning summaries: none
+session id: 019e96f6-53ce-73b1-84be-95c6356221ff
+--------
+user
+You are continuing a PBR Coding build round. The previous round implemented the main changes but the IMPL Reviewer found residual issues in web/index.html. Fix ONLY the issues listed below. Do NOT touch any other files.
+
+## CRITICAL RULES
+1. Only implement; do NOT review or judge your own work.
+2. Do NOT add AC-/Milestone/Step/Phase markers into production code.
+3. Do NOT delete any files; only edit existing ones.
+4. Do NOT modify stage/ or astra-sim/ directories.
+
+## ISSUES TO FIX (all in web/index.html only)
+
+### Issue 1: `getRows()` — missing isDev guard (AC-3)
+Location: around line 1998
+Current:
+```javascript
+function getRows() {
+  if (!state.overviewResultsDisplayed) return [];
+  if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+  return state.sweepRows.length ? state.sweepRows : mockRows;
+}
+```
+Change to:
+```javascript
+function getRows() {
+  if (!state.overviewResultsDisplayed) return [];
+  if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+  if (state.sweepRows.length) return state.sweepRows;
+  return isDev ? mockRows : [];
+}
+```
+
+### Issue 2: `normalizeExpCurveRow` — residual old field references (AC-1, AC-2)
+Location: around line 2868-2888
+Current:
+```javascript
+function normalizeExpCurveRow(row, decodeTokens) {
+  if (
+    Number.isFinite(Number(row.prefill_latency_ms)) &&
+    Number.isFinite(Number(row.decode_throughput_tokens_per_s))
+  ) {
+    return row;
+  }
+  const hasEngine =
+    Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+  const q = hasEngine
+    ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+    : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+  return {
+    ...row,
+    prefill_latency_ms: q.prefillMs,
+    decode_throughput_tokens_per_s: q.decodeTps
+  };
+}
+```
+Change to:
+```javascript
+function normalizeExpCurveRow(row, decodeTokens) {
+  if (
+    Number.isFinite(Number(row.prefill_latency_ms)) &&
+    Number.isFinite(Number(row.decode_throughput_tokens_per_s))
+  ) {
+    return row;
+  }
+  const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+  return {
+    ...row,
+    prefill_latency_ms: q.prefillMs,
+    decode_throughput_tokens_per_s: q.decodeTps
+  };
+}
+```
+
+### Issue 3: `extractFourQuantitiesFromMetrics` — remove dead code (AC-1)
+Location: around line 2831-2845
+This entire function is now dead code because `hasEngine` is always false after backend field removal. Remove the function definition entirely.
+
+### Issue 4: model_scale catch block — residual old field reference (AC-1)
+Location: around line 3008
+Current:
+```javascript
+const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
+```
+Change to:
+```javascript
+const v = Number(m?.single_star_peak_memory_gb);
+```
+Wait — these fields don't exist in astra-sim output. The model_scale experiment is a special case that measures peak memory per model scale. Since astra-sim does not currently produce memory metrics, this value will always be NaN from real data. We should keep the fallback behavior (dev-only synthetic value) but remove references to fields that no longer exist.
+
+So change to:
+```javascript
+const v = Number(m?.single_star_peak_memory_gb);
+if (Number.isFinite(v)) memGb = v;
+```
+Keep the rest of the fallback logic (including the isDev check for synthetic value) as-is.
+
+## AFTER FIXING
+Run these verification commands and report the results:
+```bash
+cd /share/guolidong-nfs/SeeSpace/SCSP_v1
+grep -n "prefill_time_s\|decode_latency_s_per_token\|decode_total_latency_s\|decode_energy_efficiency_tokens_per_j\|prefill_peak_memory_gb" web/index.html
+# The ONLY matches should be inside the MODEL_REGISTRY_BASELINE JSON string (line ~1298), nowhere else.
+grep -n "extractFourQuantitiesFromMetrics" web/index.html
+# Should return no matches (function removed)
+grep -n "getRows" web/index.html
+python3 -m py_compile scsp/*.py
+python3 run_scsp.py --help
+python3 run_web.py --help
+/share/guolidong-nfs/.venv/seespace/bin/python3 -c "from scsp.web_api import app; print('OK')"
+```
+
+codex
+I’ll make the scoped edit in `web/index.html` only, then run the exact verification commands you listed.
+exec
+/bin/bash -lc "grep -n \"function getRows\\|function normalizeExpCurveRow\\|function extractFourQuantitiesFromMetrics\\|single_star_peak_memory_gb\\|prefill_peak_memory_gb\" web/index.html" in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+1995:      function getRows() {
+2831:      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+2868:      function normalizeExpCurveRow(row, decodeTokens) {
+2887:      function normalizeExpCurveRows(rows, decodeTokens) {
+3008:                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
+3020:                single_star_peak_memory_gb: memGb
+3074:            single_star_peak_memory_gb: r.single_star_peak_memory_gb
+3158:          const vals = run.rows.map((r) => Number(r.single_star_peak_memory_gb));
+
+exec
+/bin/bash -lc 'git status --short -- web/index.html' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+ M web/index.html
+
+codex
+`web/index.html` already has local modifications, so I’m keeping the patch narrow around the named functions and field reference.
+exec
+/bin/bash -lc "sed -n '2824,2894p' web/index.html" in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+      const EXP_RESULT_METRIC_SPECS = [
+        { yKey: "prefill_latency_ms", yUnit: "Prefill延时 (ms)" },
+        { yKey: "decode_throughput_tokens_per_s", yUnit: "Decode速度 (tokens/s)" }
+      ];
+      const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+      const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+
+      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+        const tok = Math.max(1, Number(decodeTokens) || 1);
+        const prefillS = Number(m?.prefill_time_s);
+        const dlat = Number(m?.decode_latency_s_per_token);
+        let decodeTotS = Number(m?.decode_total_latency_s);
+        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+        const taskPdMs =
+          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+        return {
+          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+          energy: Number.isFinite(energy) ? energy : 0,
+          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+        };
+      }
+
+      function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+        const t = Number(totalS);
+        const tok = Math.max(1, Number(decodeTokens) || 1);
+        if (!Number.isFinite(t) || t <= 0) {
+          return { prefillMs: 0, decodeTps: 0, energy: 0, taskPdMs: 0 };
+        }
+        const prefillS = t * 0.38;
+        const decodePerTokS = (t * 0.22) / tok;
+        const decodeTotS = decodePerTokS * tok;
+        const energy = decodePerTokS > 0 ? 1 / Math.max(1e-9, 200 * decodePerTokS) : 0;
+        return {
+          prefillMs: prefillS * 1000,
+          decodeTps: decodePerTokS > 0 ? 1 / decodePerTokS : 0,
+          energy,
+          taskPdMs: (prefillS + decodeTotS) * 1000
+        };
+      }
+
+      function normalizeExpCurveRow(row, decodeTokens) {
+        if (
+          Number.isFinite(Number(row.prefill_latency_ms)) &&
+          Number.isFinite(Number(row.decode_throughput_tokens_per_s))
+        ) {
+          return row;
+        }
+        const hasEngine =
+          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+        const q = hasEngine
+          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+        return {
+          ...row,
+          prefill_latency_ms: q.prefillMs,
+          decode_throughput_tokens_per_s: q.decodeTps
+        };
+      }
+
+      function normalizeExpCurveRows(rows, decodeTokens) {
+        return (rows || []).map((r) => normalizeExpCurveRow({ ...r }, decodeTokens));
+      }
+
+      async function runExperimentAndRecordResult() {
+        if (state.experiment.runExperimentBusy) return;
+        state.experiment.runExperimentBusy = true;
+        try {
+
+exec
+/bin/bash -lc "sed -n '1988,2010p' web/index.html" in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+      }
+
+      function getOverviewKpiRow() {
+        if (!state.overviewResultsDisplayed) return null;
+        return state.kpiOverviewRow;
+      }
+
+      function getRows() {
+        if (!state.overviewResultsDisplayed) return [];
+        if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+        return state.sweepRows.length ? state.sweepRows : mockRows;
+      }
+      function getBandwidthSensitivityRows() {
+        if (!state.overviewResultsDisplayed) return [];
+        return state.bandwidthSensitivityRows.length ? state.bandwidthSensitivityRows : getRows();
+      }
+      function getComputeSensitivityRows() {
+        if (!state.overviewResultsDisplayed) return [];
+        if (state.computeSensitivityRows.length) return state.computeSensitivityRows;
+        const baseline = getRows();
+        const baseP = Number(state.config.big_star_peak_pflops_single || state.config.big_star_peak_pflops || 10.0);
+        return [
+          { single_star_pflops: +(baseP * 0.6).toFixed(2), total_latency_s: baseline[0].total_latency_s * 1.42 },
+
+exec
+/bin/bash -lc "sed -n '2998,3016p' web/index.html" in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+            for (let mi = 0; mi < models.length; mi += 1) {
+              const name = models[mi];
+              let memGb = NaN;
+              try {
+                applyRegistryModel(name);
+                renderConfigInputs();
+                readConfigFromInputs();
+                const c = buildConfigForSimulation({});
+                const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                const m = ret?.metrics;
+                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
+                if (Number.isFinite(v)) memGb = v;
+              } catch {
+                toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+                memGb = NaN;
+              }
+              if (!Number.isFinite(memGb)) {
+                if (isDev) memGb = 6 + mi * 5;
+              }
+
+codex
+I found the three exact code regions. I’m removing the now-unused extractor and simplifying the normalization path so the old backend metric names disappear outside the registry baseline string.
+apply patch
+patch: completed
+/share/guolidong-nfs/SeeSpace/SCSP_v1/web/index.html
+diff --git a/web/index.html b/web/index.html
+index 2c83bc34ca8c195067560c0221c384698c89c93b..0bc4d5d6546db42afa4336c8bcdd7b37f566819d
+--- a/web/index.html
++++ b/web/index.html
+@@ -1995,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2827,25 +2828,6 @@
+       ];
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+-
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+ 
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+@@ -2872,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -3005,7 +2983,7 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
+                 toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+
+diff --git a/web/index.html b/web/index.html
+index 2c83bc34ca8c195067560c0221c384698c89c93b..0bc4d5d6546db42afa4336c8bcdd7b37f566819d
+--- a/web/index.html
++++ b/web/index.html
+@@ -1995,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2827,25 +2828,6 @@
+       ];
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+-
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+ 
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+@@ -2872,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -3005,7 +2983,7 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
+                 toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+
+codex
+The scoped edit is in place. I’m running the requested checks now, including the greps that are expected to either narrow to the registry baseline or return no matches.
+exec
+/bin/bash -lc "grep -n \"prefill_time_s\\|decode_latency_s_per_token\\|decode_total_latency_s\\|decode_energy_efficiency_tokens_per_j\\|prefill_peak_memory_gb\" web/index.html" in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ exited 1 in 0ms:
+exec
+/bin/bash -lc 'grep -n "extractFourQuantitiesFromMetrics" web/index.html' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ exited 1 in 0ms:
+exec
+/bin/bash -lc 'grep -n "getRows" web/index.html' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+1995:      function getRows() {
+2003:        return state.bandwidthSensitivityRows.length ? state.bandwidthSensitivityRows : getRows();
+2008:        const baseline = getRows();
+
+exec
+/bin/bash -lc 'python3 -m py_compile scsp/*.py' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+diff --git a/web/index.html b/web/index.html
+index 2c83bc34ca8c195067560c0221c384698c89c93b..0bc4d5d6546db42afa4336c8bcdd7b37f566819d
+--- a/web/index.html
++++ b/web/index.html
+@@ -1995,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2827,25 +2828,6 @@
+       ];
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+-
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+ 
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+@@ -2872,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -3005,7 +2983,7 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
+                 toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+
+codex
+The old backend field grep returned no matches at all, which is stricter than the expected “registry string only” result in this checkout. The removed helper grep also returned no matches.
+exec
+/bin/bash -lc 'python3 run_web.py --help' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+usage: run_web.py [-h] [--port PORT]
+
+options:
+  -h, --help   show this help message and exit
+  --port PORT
+
+exec
+/bin/bash -lc 'python3 run_scsp.py --help' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+usage: run_scsp.py [-h] --config CONFIG [--output-prefix OUTPUT_PREFIX]
+
+Run SCSP v1 simulation (single or sweep)
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Path to JSON config file
+  --output-prefix OUTPUT_PREFIX
+                        Output directory. Single run writes
+                        '<dir>/single.json'; sweep writes '<dir>/sweep.json'
+                        and '<dir>/sweep.csv'
+
+exec
+/bin/bash -lc "/share/guolidong-nfs/.venv/seespace/bin/python3 -c \"from scsp.web_api import app; print('OK')\"" in /share/guolidong-nfs/SeeSpace/SCSP_v1
+diff --git a/web/index.html b/web/index.html
+index 2c83bc34ca8c195067560c0221c384698c89c93b..0bc4d5d6546db42afa4336c8bcdd7b37f566819d
+--- a/web/index.html
++++ b/web/index.html
+@@ -1995,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2827,25 +2828,6 @@
+       ];
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+-
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+ 
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+@@ -2872,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -3005,7 +2983,7 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
+                 toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+
+ succeeded in 571ms:
+OK
+
+codex
+All requested Python and import checks passed. I’m doing one final diff check limited to `web/index.html` so I can report exactly what changed.
+exec
+/bin/bash -lc 'git diff -- web/index.html' in /share/guolidong-nfs/SeeSpace/SCSP_v1
+ succeeded in 0ms:
+diff --git a/web/index.html b/web/index.html
+index cd135f2..0bc4d5d 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -940,20 +940,20 @@
+               <h3>关键指标</h3>
+               <div class="kpi-split">
+                 <div class="kpi-col">
+-                  <div class="kpi-item"><div class="kpi-k">Prefill时延（ms）</div><div class="kpi-v" id="kpiPrefillLatency">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill计算项时延（s/patch）</div><div class="kpi-v" id="kpiPrefillComputeTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill访存项时延（s/patch）</div><div class="kpi-v" id="kpiPrefillMemoryTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill主导瓶颈</div><div class="kpi-v" id="kpiPrefillBottleneck">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill有效算力（PFLOPS）</div><div class="kpi-v" id="kpiPrefillPflops">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">单星峰值显存占用（GB）</div><div class="kpi-v" id="kpiPrefillPeakMem">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">总时延（s）</div><div class="kpi-v" id="kpiPrefillLatency">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">总时延（ms）</div><div class="kpi-v" id="kpiPrefillComputeTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">有效算力（PFLOPS）</div><div class="kpi-v" id="kpiPrefillMemoryTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">主导瓶颈</div><div class="kpi-v" id="kpiPrefillBottleneck">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">计算利用率（%）</div><div class="kpi-v" id="kpiPrefillPflops">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">样本数</div><div class="kpi-v" id="kpiPrefillPeakMem">-</div></div>
+                 </div>
+                 <div class="kpi-col">
+-                  <div class="kpi-item"><div class="kpi-k">Decode时延（ms）</div><div class="kpi-v" id="kpiDecodeLatency">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode计算项时延（ms/token）</div><div class="kpi-v" id="kpiDecodeComputeTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode访存项时延（ms/token）</div><div class="kpi-v" id="kpiDecodeMemoryTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode主导瓶颈</div><div class="kpi-v" id="kpiDecodeBottleneck">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode有效算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodePflops">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode能效（tokens/J）</div><div class="kpi-v" id="kpiDecodeEnergyEfficiency">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">带宽点（Gbps）</div><div class="kpi-v" id="kpiDecodeLatency">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">峰值算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodeComputeTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">有效算力（FLOPS）</div><div class="kpi-v" id="kpiDecodeMemoryTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">瓶颈类别</div><div class="kpi-v" id="kpiDecodeBottleneck">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">有效算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodePflops">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">计算利用率</div><div class="kpi-v" id="kpiDecodeEnergyEfficiency">-</div></div>
+                 </div>
+               </div>
+             </div>
+@@ -1293,6 +1293,7 @@
+ 
+     <script>
+       let MODEL_REGISTRY = {};
++      const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+ 
+       const MODEL_REGISTRY_BASELINE = JSON.parse(`{"Qwen2.5-VL-3B":{"model_params":"3B","structure":{"model_name":"Qwen2.5-VL-3B","model_type":"vlm","parameter_count":{"active_unit":3000000000,"resident_unit":3000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":36,"hidden_size":2560,"intermediate_size":9728,"num_attention_heads":20,"num_key_value_heads":4},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":2560}},"profiling":{"prefill_flops_gflops_per_patch":3623.7,"decode_flops_gflops_per_token":5.603,"prefill_memory_gb_per_patch":8.44,"prefill_peak_memory_breakdown_gb":{"weight_gb":5.2,"kv_cache_gb":1.2,"activation_peak_gb":1.74,"workspace_gb":0.3},"decode_memory_mb_per_token":6808,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":6.45,"kv_cache_read_gb_per_token":0.2,"kv_cache_write_gb_per_token":0.0001,"activation_and_intermediate_gb_per_token":0.1579},"inter_stage_transfer":{"prefill_mb":1.79,"decode_kb":5.72}}},"Qwen2.5-VL-7B":{"model_params":"7B","structure":{"model_name":"Qwen2.5-VL-7B","model_type":"vlm","parameter_count":{"active_unit":7000000000,"resident_unit":7000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":28,"hidden_size":3584,"intermediate_size":18944,"num_attention_heads":28,"num_key_value_heads":4},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":3584}},"profiling":{"prefill_flops_gflops_per_patch":6275,"decode_flops_gflops_per_token":13.124,"prefill_memory_gb_per_patch":16.57,"prefill_peak_memory_breakdown_gb":{"weight_gb":11,"kv_cache_gb":2.2,"activation_peak_gb":2.77,"workspace_gb":0.6},"decode_memory_mb_per_token":15252,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":14.85,"kv_cache_read_gb_per_token":0.15,"kv_cache_write_gb_per_token":0.0001,"activation_and_intermediate_gb_per_token":0.2519},"inter_stage_transfer":{"prefill_mb":2.5,"decode_kb":7.17}}},"Qwen2.5-VL-32B":{"model_params":"32B","structure":{"model_name":"Qwen2.5-VL-32B","model_type":"vlm","parameter_count":{"active_unit":32000000000,"resident_unit":32000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":64,"hidden_size":5120,"intermediate_size":27648,"num_attention_heads":40,"num_key_value_heads":8},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":5120}},"profiling":{"prefill_flops_gflops_per_patch":23729.2,"decode_flops_gflops_per_token":62.6511,"prefill_memory_gb_per_patch":67.77,"prefill_peak_memory_breakdown_gb":{"weight_gb":64.98,"kv_cache_gb":0.09,"activation_peak_gb":1.61,"workspace_gb":1.08},"decode_memory_mb_per_token":67199,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":65.528,"kv_cache_read_gb_per_token":0.0954,"kv_cache_write_gb_per_token":0.000262,"activation_and_intermediate_gb_per_token":4.1e-05},"inter_stage_transfer":{"prefill_mb":3.57,"decode_kb":10.24}}}}`);
+ 
+@@ -1321,7 +1322,7 @@
+           decode_flops_per_token: 1.435e11,
+           decode_memory_bytes_per_token: 1.0e8,
+           peak_vram_gb: 120,
+-          num_images: 1,
++          batch: 1,
+           big_star_peak_pflops_single: 10.0,
+           big_star_peak_pflops_sweep: [6, 8, 10, 12, 14],
+           big_star_peak_pflops: 10.0,
+@@ -1375,11 +1376,11 @@
+       };
+ 
+       const mockRows = [
+-        { link_bandwidth_gbps: 10, total_latency_s: 167.21, effective_compute_pflops: 5.1, data_tx_latency_s: 29.53, inter_stage_latency_s: 18.8, stage1_compute_latency_s: 62.14, stage2_compute_latency_s: 57.54, compute_utilization: 0.51 },
+-        { link_bandwidth_gbps: 50, total_latency_s: 132.45, effective_compute_pflops: 6.8, data_tx_latency_s: 19.53, inter_stage_latency_s: 14.2, stage1_compute_latency_s: 56.14, stage2_compute_latency_s: 42.58, compute_utilization: 0.68 },
+-        { link_bandwidth_gbps: 100, total_latency_s: 124.53, effective_compute_pflops: 8.1, data_tx_latency_s: 14.53, inter_stage_latency_s: 9.17, stage1_compute_latency_s: 62.14, stage2_compute_latency_s: 27.86, compute_utilization: 0.812 },
+-        { link_bandwidth_gbps: 200, total_latency_s: 118.92, effective_compute_pflops: 8.45, data_tx_latency_s: 11.12, inter_stage_latency_s: 7.8, stage1_compute_latency_s: 61.21, stage2_compute_latency_s: 26.79, compute_utilization: 0.845 },
+-        { link_bandwidth_gbps: 400, total_latency_s: 116.77, effective_compute_pflops: 8.6, data_tx_latency_s: 9.64, inter_stage_latency_s: 6.6, stage1_compute_latency_s: 60.44, stage2_compute_latency_s: 25.23, compute_utilization: 0.86 }
++        { total_samples: 1, link_bandwidth_gbps: 10, total_latency_s: 167.21, effective_compute_flops: 5.1e15, effective_compute_pflops: 5.1, ideal_peak_pflops: 10.0, compute_utilization: 0.51, bottleneck_stage: "communication" },
++        { total_samples: 1, link_bandwidth_gbps: 50, total_latency_s: 132.45, effective_compute_flops: 6.8e15, effective_compute_pflops: 6.8, ideal_peak_pflops: 10.0, compute_utilization: 0.68, bottleneck_stage: "communication" },
++        { total_samples: 1, link_bandwidth_gbps: 100, total_latency_s: 124.53, effective_compute_flops: 8.1e15, effective_compute_pflops: 8.1, ideal_peak_pflops: 10.0, compute_utilization: 0.812, bottleneck_stage: "compute" },
++        { total_samples: 1, link_bandwidth_gbps: 200, total_latency_s: 118.92, effective_compute_flops: 8.45e15, effective_compute_pflops: 8.45, ideal_peak_pflops: 10.0, compute_utilization: 0.845, bottleneck_stage: "compute" },
++        { total_samples: 1, link_bandwidth_gbps: 400, total_latency_s: 116.77, effective_compute_flops: 8.6e15, effective_compute_pflops: 8.6, ideal_peak_pflops: 10.0, compute_utilization: 0.86, bottleneck_stage: "compute" }
+       ];
+ 
+       /** 实验设计页「其他参数」与主表单 cfg* 镜像（不含模型结构/参数量、不含任何扫描列表；标称模型/算力/带宽由核心区同步） */
+@@ -1429,6 +1430,23 @@
+ 
+       const byId = (id) => document.getElementById(id);
+       const toPrettyJson = (obj) => JSON.stringify(obj || {}, null, 2);
++      function toast(message, options = {}) {
++        const box = document.createElement("div");
++        box.textContent = message;
++        box.style.position = "fixed";
++        box.style.right = "18px";
++        box.style.bottom = "18px";
++        box.style.zIndex = "9999";
++        box.style.maxWidth = "360px";
++        box.style.padding = "10px 12px";
++        box.style.borderRadius = "8px";
++        box.style.border = "1px solid rgba(255,255,255,0.18)";
++        box.style.background = options.type === "error" ? "rgba(126, 31, 31, 0.94)" : "rgba(13, 27, 55, 0.94)";
++        box.style.color = "#f7fbff";
++        box.style.boxShadow = "0 10px 24px rgba(0,0,0,0.28)";
++        document.body.appendChild(box);
++        window.setTimeout(() => box.remove(), 3200);
++      }
+       const toBText = (count) => {
+         const n = Number(count || 0);
+         if (!Number.isFinite(n) || n <= 0) return "";
+@@ -1588,35 +1606,16 @@
+       function metricsResponseToKpiRow(apiResult, linkBw, pflops) {
+         const m = apiResult && apiResult.metrics;
+         if (!m || !Number.isFinite(Number(m.total_latency_s))) return null;
+-        const unsupported = new Set(Array.isArray(apiResult.unsupported_fields) ? apiResult.unsupported_fields : []);
+-        const metricValue = (key) => unsupported.has(key) ? null : Number(m[key]);
+-        const metricText = (key) => unsupported.has(key) ? "—" : String(m[key] || "");
+         return {
+           total_samples: Number(m.total_samples),
+           link_bandwidth_gbps: linkBw,
+           single_star_pflops: pflops,
+           total_latency_s: Number(m.total_latency_s),
++          effective_compute_flops: Number(m.effective_compute_flops),
+           effective_compute_pflops: Number(m.effective_compute_pflops),
+-          data_tx_latency_s: metricValue("data_tx_latency_s"),
+-          inter_stage_latency_s: metricValue("inter_stage_latency_s"),
+-          stage1_compute_latency_s: metricValue("stage1_compute_latency_s"),
+-          stage2_compute_latency_s: metricValue("stage2_compute_latency_s"),
++          ideal_peak_pflops: Number(m.ideal_peak_pflops),
+           compute_utilization: Number(m.compute_utilization),
+-          prefill_compute_time_s: metricValue("prefill_compute_time_s"),
+-          prefill_memory_time_s: metricValue("prefill_memory_time_s"),
+-          prefill_time_s: metricValue("prefill_time_s"),
+-          prefill_bottleneck: metricText("prefill_bottleneck"),
+-          prefill_peak_memory_gb: metricValue("prefill_peak_memory_gb"),
+-          single_star_peak_memory_gb: unsupported.has("single_star_peak_memory_gb") ? null : Number(m.single_star_peak_memory_gb ?? m.prefill_peak_memory_gb),
+-          decode_latency_s_per_token: metricValue("decode_latency_s_per_token"),
+-          decode_total_latency_s: metricValue("decode_total_latency_s"),
+-          decode_compute_latency_s_per_token: metricValue("decode_compute_latency_s_per_token"),
+-          decode_memory_latency_s_per_token: metricValue("decode_memory_latency_s_per_token"),
+-          decode_effective_compute_pflops: metricValue("decode_effective_compute_pflops"),
+-          decode_bottleneck: metricText("decode_bottleneck"),
+-          decode_energy_efficiency_tokens_per_j: metricValue("decode_energy_efficiency_tokens_per_j"),
+-          total_inference_time_s: metricValue("total_inference_time_s"),
+-          unsupported_fields: unsupported
++          bottleneck_stage: String(m.bottleneck_stage || "")
+         };
+       }
+ 
+@@ -1996,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2061,34 +2061,18 @@
+             el.classList.remove("unsupported-metric");
+           }
+         };
+-        const prefillTotal = r.prefill_time_s;
+-        const prefillCompute = r.prefill_compute_time_s;
+-        const prefillMemory = r.prefill_memory_time_s;
+-        const prefillBottleneck = String(r.prefill_bottleneck || "-");
+-        const decodeTokensKpi = Math.max(1, Math.round(Number(state.config.decode_tokens) || 1));
+-        let decodeTotalS = r.decode_total_latency_s;
+-        if (decodeTotalS !== null && !Number.isFinite(Number(decodeTotalS))) {
+-          decodeTotalS =
+-            Number(r.decode_latency_s_per_token || 0) * decodeTokensKpi;
+-        }
+-        const decodeCompute = r.decode_compute_latency_s_per_token;
+-        const decodeMemory = r.decode_memory_latency_s_per_token;
+-        const decodeBottleneck = String(r.decode_bottleneck || "-");
+-        const decodeEffectivePflops = Number(r.decode_effective_compute_pflops);
+-        const decodeEnergyEfficiency = Number(r.decode_energy_efficiency_tokens_per_j);
+-        const prefillPeakMemGb = r.single_star_peak_memory_gb ?? r.prefill_peak_memory_gb ?? null;
+-        setMetric("kpiPrefillLatency", prefillTotal, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setMetric("kpiPrefillComputeTime", prefillCompute, (v) => `${v.toFixed(4)}`);
+-        setMetric("kpiPrefillMemoryTime", prefillMemory, (v) => `${v.toFixed(4)}`);
+-        setTextMetric("kpiPrefillBottleneck", prefillBottleneck);
+-        setMetric("kpiPrefillPflops", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
+-        setMetric("kpiPrefillPeakMem", prefillPeakMemGb, (v) => `${v.toFixed(2)}`);
+-        setMetric("kpiDecodeLatency", decodeTotalS, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setMetric("kpiDecodeComputeTime", decodeCompute, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setMetric("kpiDecodeMemoryTime", decodeMemory, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setTextMetric("kpiDecodeBottleneck", decodeBottleneck);
+-        setMetric("kpiDecodePflops", decodeEffectivePflops, (v) => `${v.toFixed(3)}`);
+-        setMetric("kpiDecodeEnergyEfficiency", decodeEnergyEfficiency, (v) => `${v.toFixed(3)}`);
++        setMetric("kpiPrefillLatency", r.total_latency_s, (v) => `${v.toFixed(3)}`);
++        setMetric("kpiPrefillComputeTime", r.total_latency_s, (v) => `${(v * 1e3).toFixed(1)}`);
++        setMetric("kpiPrefillMemoryTime", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
++        setTextMetric("kpiPrefillBottleneck", r.bottleneck_stage || "—");
++        setMetric("kpiPrefillPflops", r.compute_utilization, (v) => `${(v * 100).toFixed(1)}`);
++        setMetric("kpiPrefillPeakMem", r.total_samples, (v) => `${Math.round(v)}`);
++        setMetric("kpiDecodeLatency", r.link_bandwidth_gbps, (v) => `${v.toFixed(0)}`);
++        setMetric("kpiDecodeComputeTime", r.single_star_pflops, (v) => `${v.toFixed(2)}`);
++        setMetric("kpiDecodeMemoryTime", r.effective_compute_flops, (v) => `${v.toExponential(2)}`);
++        setTextMetric("kpiDecodeBottleneck", r.bottleneck_stage || "—");
++        setMetric("kpiDecodePflops", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
++        setMetric("kpiDecodeEnergyEfficiency", r.compute_utilization, (v) => `${v.toFixed(3)}`);
+       }
+ 
+       function renderDonut() {
+@@ -2103,39 +2087,19 @@
+           byId("delayLegend").innerHTML = "";
+           return;
+         }
+-        const cfg = state.config || {};
+-        const bw = Math.max(1, Number(cfg.link_bandwidth_gbps_single || 400));
+-        const distanceKm = Math.max(0, Number(cfg.inter_sat_distance_km || 10));
+-        const flops = Math.max(0, Number(cfg.flops_per_sample || 0));
+-        const peakPflops = Math.max(1e-9, Number(cfg.big_star_peak_pflops_single || cfg.big_star_peak_pflops || 10.0));
+-        const memoryBwBytesPerSec = Math.max(1e-9, Number(cfg.single_node_memory_bandwidth_bytes_per_sec || 2.0e13));
+-        const prefillMemoryBytes = Math.max(0, Number(cfg.prefill_memory_bytes_per_patch || 5.0e10));
+-        const imageType = String(cfg.image_type || "RGB").toUpperCase();
+-        const channels = imageType === "SAR" ? 1 : 3;
+-        const bytesPerPixel = imageType === "SAR" ? 4 : 2;
+-        const tileText = String(cfg.tile_size || "512x512").toLowerCase();
+-        const [tileW, tileH] = tileText.split("x").map((n) => Number(n.trim()));
+-        if (!Number.isFinite(tileW) || !Number.isFinite(tileH) || tileW <= 0 || tileH <= 0) {
++        const r = getOverviewKpiRow();
++        const totalLatency = Number(r?.total_latency_s);
++        const computeUtil = Number(r?.compute_utilization);
++        if (!Number.isFinite(totalLatency) || totalLatency <= 0 || !Number.isFinite(computeUtil)) {
+           byId("donut").innerHTML = "";
+           byId("delayLegend").innerHTML = "";
+           return;
+         }
+-        const tileMb = (tileW * tileH * channels * bytesPerPixel) / 1_000_000;
+-        const transfer = (dataMb) => {
+-          const serialization = (dataMb * 8.0) / (bw * 1000.0);
+-          const propagation = (distanceKm * 1000.0) / 299792458.0;
+-          return serialization + propagation;
+-        };
+-        const txRemoteToCompute = transfer(tileMb);
+-        const txComputeToCompute = transfer(Number(cfg.prefill_inter_stage_transfer_mb || 0));
+-        const effectiveStarFlops = peakPflops * 1e15;
+-        const computeLatency = (flops / effectiveStarFlops);
+-        const memoryLatency = prefillMemoryBytes / memoryBwBytesPerSec;
+-        const prefillLatency = Math.max(computeLatency, memoryLatency);
++        const computeTime = totalLatency * Math.max(0, Math.min(1, computeUtil));
++        const otherTime = Math.max(0, totalLatency - computeTime);
+         const seg = [
+-          { k: "遥感星-计算星传输", v: txRemoteToCompute, c: "#57a6ff" },
+-          { k: "计算星-计算星传输", v: txComputeToCompute, c: "#7f76ff" },
+-          { k: "计算星 Prefill 时延", v: prefillLatency, c: "#3fd389" }
++          { k: "ASTRA GPU时间", v: computeTime, c: "#3fd389" },
++          { k: "ASTRA通信/等待时间", v: otherTime, c: "#57a6ff" }
+         ];
+         const total = seg.reduce((s, i) => s + i.v, 0.00001);
+         const radius = 68;
+@@ -2865,25 +2829,6 @@
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+ 
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+-
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+         const tok = Math.max(1, Number(decodeTokens) || 1);
+@@ -2909,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -2958,8 +2899,13 @@
+               const ret = await apiPost("/api/simulations/sweep", { config: cfg, bandwidths_gbps: bws });
+               rows = Array.isArray(ret.rows) && ret.rows.length ? ret.rows : [];
+             } catch {
+-              rows = mockRows.filter((r) => bws.includes(r.link_bandwidth_gbps));
+-              if (!rows.length) rows = mockRows.slice();
++              toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
++              if (isDev) {
++                rows = mockRows.filter((r) => bws.includes(r.link_bandwidth_gbps));
++                if (!rows.length) rows = mockRows.slice();
++              } else {
++                rows = [];
++              }
+             }
+           } else if (tid === "compute_sweep") {
+             xKey = "single_star_pflops";
+@@ -2981,13 +2927,15 @@
+               }
+             }
+             if (!rows.length) {
+-              const baseP = Number(state.config.big_star_peak_pflops_single) || 10;
+-              plist.forEach((p) => {
+-                rows.push({
+-                  single_star_pflops: p,
+-                  total_latency_s: (mockRows[2].total_latency_s * baseP) / Math.max(p, 0.1)
++              if (isDev) {
++                const baseP = Number(state.config.big_star_peak_pflops_single) || 10;
++                plist.forEach((p) => {
++                  rows.push({
++                    single_star_pflops: p,
++                    total_latency_s: (mockRows[2].total_latency_s * baseP) / Math.max(p, 0.1)
++                  });
+                 });
+-              });
++              }
+             }
+           } else if (tid === "inter_sat_distance") {
+             xKey = "inter_sat_distance_km";
+@@ -3005,11 +2953,12 @@
+                 const ret = await apiPost("/api/simulations/single", { config: pointCfg, bandwidth_gbps: bw });
+                 m = ret?.metrics;
+               } catch {
++                toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+                 m = null;
+               }
+               if (m && Number.isFinite(Number(m.total_latency_s))) {
+                 rows.push({ inter_sat_distance_km: dist, ...m });
+-              } else {
++              } else if (isDev) {
+                 rows.push({ inter_sat_distance_km: dist, total_latency_s: 88 + dist * 0.42 });
+               }
+             }
+@@ -3034,12 +2983,15 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
++                toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+                 memGb = NaN;
+               }
+-              if (!Number.isFinite(memGb)) memGb = 6 + mi * 5;
++              if (!Number.isFinite(memGb)) {
++                if (isDev) memGb = 6 + mi * 5;
++              }
+               rows.push({
+                 model: colLabels[mi],
+                 model_name: name,
+@@ -3598,15 +3550,19 @@
+           };
+           showResult(ret);
+         } catch {
++          toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+           state.overviewResultsDisplayed = true;
+           readConfigFromInputs();
+-          const sbw = state.config.link_bandwidth_gbps_single;
+-          const sp = state.config.big_star_peak_pflops_single;
+-          state.kpiOverviewRow = mockRows.find((r) => r.link_bandwidth_gbps === sbw) || mockRows[Math.min(2, mockRows.length - 1)];
+-          state.sweepRows = mockRows;
+-          state.bandwidthSensitivityRows = mockRows;
+-          state.computeSensitivityRows = [];
+-          showResult({ warning: "后端接口不可用，已回退 mock 数据。" });
++          if (isDev) {
++            const sbw = state.config.link_bandwidth_gbps_single;
++            state.kpiOverviewRow = mockRows.find((r) => r.link_bandwidth_gbps === sbw) || mockRows[Math.min(2, mockRows.length - 1)];
++            state.sweepRows = mockRows;
++            state.bandwidthSensitivityRows = mockRows;
++            state.computeSensitivityRows = [];
++            showResult({ warning: "后端接口不可用，已回退 mock 数据。" });
++          } else {
++            showResult({ error: "后端接口不可用" });
++          }
+           renderAll();
+         }
+       };
+@@ -3634,7 +3590,11 @@
+           const health = await apiGet("/api/health");
+           byId("healthText").textContent = `API 状态：${health.status || "ok"}`;
+         } catch {
+-          byId("healthText").textContent = "API 状态：不可用（已启用 mock 展示）";
++          if (isDev) {
++            byId("healthText").textContent = "API 状态：不可用（已启用 mock 展示）";
++          } else {
++            byId("healthText").textContent = "API 状态：不可用";
++          }
+         }
+         state.overviewResultsDisplayed = false;
+         state.sweepRows = [];
+
+diff --git a/web/index.html b/web/index.html
+index 2c83bc34ca8c195067560c0221c384698c89c93b..0bc4d5d6546db42afa4336c8bcdd7b37f566819d
+--- a/web/index.html
++++ b/web/index.html
+@@ -1995,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2827,25 +2828,6 @@
+       ];
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+-
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+ 
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+@@ -2872,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -3005,7 +2983,7 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
+                 toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+
+codex
+Implemented the requested fixes in `web/index.html` only.
+
+Verification results:
+
+- Old backend field grep: no matches found.
+- `extractFourQuantitiesFromMetrics` grep: no matches found.
+- `getRows` grep:
+  - `1995:function getRows()`
+  - call sites at `2003`, `2008`
+- `python3 -m py_compile scsp/*.py`: passed
+- `python3 run_scsp.py --help`: passed
+- `python3 run_web.py --help`: passed
+- `/share/guolidong-nfs/.venv/seespace/bin/python3 -c "from scsp.web_api import app; print('OK')"`: printed `OK`
+diff --git a/web/index.html b/web/index.html
+index 2c83bc34ca8c195067560c0221c384698c89c93b..0bc4d5d6546db42afa4336c8bcdd7b37f566819d
+--- a/web/index.html
++++ b/web/index.html
+@@ -1995,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2827,25 +2828,6 @@
+       ];
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+-
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+ 
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+@@ -2872,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -3005,7 +2983,7 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
+                 toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+
+tokens used
+24,367
+Implemented the requested fixes in `web/index.html` only.
+
+Verification results:
+
+- Old backend field grep: no matches found.
+- `extractFourQuantitiesFromMetrics` grep: no matches found.
+- `getRows` grep:
+  - `1995:function getRows()`
+  - call sites at `2003`, `2008`
+- `python3 -m py_compile scsp/*.py`: passed
+- `python3 run_scsp.py --help`: passed
+- `python3 run_web.py --help`: passed
+- `/share/guolidong-nfs/.venv/seespace/bin/python3 -c "from scsp.web_api import app; print('OK')"`: printed `OK`

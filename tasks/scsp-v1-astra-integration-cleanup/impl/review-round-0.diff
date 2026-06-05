@@ -1,0 +1,856 @@
+diff --git a/README-astra-integration.md b/README-astra-integration.md
+index 556f415..04054b3 100644
+--- a/README-astra-integration.md
++++ b/README-astra-integration.md
+@@ -41,31 +41,33 @@ astra-sim/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Aware
+ 
+ ## Unsupported Metrics
+ 
+-ASTRA-sim currently runs the full Chakra execution graph as an event-driven simulation. It reports aggregate wall, GPU, communication, and overlap times, but it does not distinguish SCSP's old analytical prefill/decode pipeline stages. These `SimulationMetrics` fields are therefore unsupported and returned as placeholder values, with field names listed in `unsupported_fields`:
+-
+-- `data_tx_latency_s`
+-- `inter_stage_latency_s`
+-- `stage1_compute_latency_s`
+-- `stage2_compute_latency_s`
+-- `decode_latency_s_per_token`
+-- `decode_total_latency_s`
+-- `decode_compute_latency_s_per_token`
+-- `decode_memory_latency_s_per_token`
+-- `decode_effective_compute_pflops`
+-- `decode_bottleneck`
+-- `prefill_compute_time_s`
+-- `prefill_memory_time_s`
+-- `prefill_time_s`
+-- `prefill_bottleneck`
+-- `decode_energy_efficiency_tokens_per_j`
+-- `total_inference_time_s`
+-- `prefill_peak_memory_bytes`
+-- `prefill_peak_memory_gb`
+-- `single_star_peak_memory_bytes`
+-- `single_star_peak_memory_gb`
+-- `prefill_weight_memory_bytes`
+-- `prefill_kv_memory_bytes`
+-- `prefill_activation_peak_memory_bytes`
+-- `prefill_workspace_memory_bytes`
++ASTRA-sim currently runs the full Chakra execution graph as an event-driven simulation. It reports aggregate wall, GPU, communication, and overlap times, but it does not distinguish SCSP's old analytical prefill/decode pipeline stages. The legacy metrics that were previously returned as placeholders are documented in [Legacy Metrics Reference](#legacy-metrics-reference) above.
+ 
+ Extending these metrics requires either splitting or annotating the stage-generated ET by phase, or adding new phase-aware counters inside ASTRA-sim.
++
++## Legacy Metrics Reference
++
++The following fields were previously part of `SimulationMetrics` but have been removed from the codebase because they are not produced by ASTRA-sim. They are preserved here for reference in future iterations that may reintroduce phase-aware simulation or analytical decomposition.
++
++- `data_tx_latency_s` — Data transmission latency between pipeline stages.
++- `inter_stage_latency_s` — Inter-stage communication latency.
++- `stage1_compute_latency_s` — Compute latency of the first pipeline stage.
++- `stage2_compute_latency_s` — Compute latency of the second pipeline stage.
++- `decode_latency_s_per_token` — Per-token decode latency.
++- `decode_total_latency_s` — Total decode latency across all tokens.
++- `decode_compute_latency_s_per_token` — Per-token decode compute latency.
++- `decode_memory_latency_s_per_token` — Per-token decode memory latency.
++- `decode_effective_compute_pflops` — Decode-phase effective compute throughput.
++- `decode_bottleneck` — Bottleneck identifier for the decode phase.
++- `prefill_compute_time_s` — Prefill compute time.
++- `prefill_memory_time_s` — Prefill memory time.
++- `prefill_time_s` — Total prefill time.
++- `prefill_bottleneck` — Bottleneck identifier for the prefill phase.
++- `decode_energy_efficiency_tokens_per_j` — Decode energy efficiency in tokens per joule.
++- `total_inference_time_s` — Total end-to-end inference time.
++- `prefill_peak_memory_bytes` / `prefill_peak_memory_gb` — Peak memory during prefill.
++- `single_star_peak_memory_bytes` / `single_star_peak_memory_gb` — Peak memory per star.
++- `prefill_weight_memory_bytes` — Weight memory during prefill.
++- `prefill_kv_memory_bytes` — KV-cache memory during prefill.
++- `prefill_activation_peak_memory_bytes` — Activation peak memory during prefill.
++- `prefill_workspace_memory_bytes` — Workspace memory during prefill.
+diff --git a/scsp/astra_sim_bridge.py b/scsp/astra_sim_bridge.py
+index 4be3d59..1859e9a 100644
+--- a/scsp/astra_sim_bridge.py
++++ b/scsp/astra_sim_bridge.py
+@@ -29,34 +29,6 @@ ASTRA_SIM_BIN = (
+ RESULT_PREFIX = "ASTRA_SIM_RESULT:"
+ 
+ 
+-UNSUPPORTED_FIELDS = [
+-    "data_tx_latency_s",
+-    "inter_stage_latency_s",
+-    "stage1_compute_latency_s",
+-    "stage2_compute_latency_s",
+-    "decode_latency_s_per_token",
+-    "decode_total_latency_s",
+-    "decode_compute_latency_s_per_token",
+-    "decode_memory_latency_s_per_token",
+-    "decode_effective_compute_pflops",
+-    "decode_bottleneck",
+-    "prefill_compute_time_s",
+-    "prefill_memory_time_s",
+-    "prefill_time_s",
+-    "prefill_bottleneck",
+-    "decode_energy_efficiency_tokens_per_j",
+-    "total_inference_time_s",
+-    "prefill_peak_memory_bytes",
+-    "prefill_peak_memory_gb",
+-    "single_star_peak_memory_bytes",
+-    "single_star_peak_memory_gb",
+-    "prefill_weight_memory_bytes",
+-    "prefill_kv_memory_bytes",
+-    "prefill_activation_peak_memory_bytes",
+-    "prefill_workspace_memory_bytes",
+-]
+-
+-
+ def _safe_slug(value: str) -> str:
+     slug = re.sub(r"[^a-zA-Z0-9_.-]+", "_", value.strip())
+     return slug.strip("._-") or "scsp_model"
+@@ -111,6 +83,19 @@ def _positive_int(config: Dict[str, Any], key: str, default: int = 1) -> int:
+     return value
+ 
+ 
++def _max_dimension(value: Any, default: int) -> int:
++    text = str(value or "")
++    parts = text.lower().split("x")
++    if len(parts) != 2:
++        return default
++    try:
++        dims = [int(parts[0]), int(parts[1])]
++    except ValueError:
++        return default
++    positive_dims = [dim for dim in dims if dim > 0]
++    return max(positive_dims) if positive_dims else default
++
++
+ def _run_stage(
+     config: Dict[str, Any],
+     model_params: Dict[str, Any],
+@@ -119,21 +104,41 @@ def _run_stage(
+     output_prefix: str,
+ ) -> tuple[Path, Path]:
+     output_dir.mkdir(parents=True, exist_ok=True)
+-    dp = _positive_int(config, "dp", 1)
+-    tp = _positive_int(config, "tp", 1)
+-    pp = _positive_int(config, "pp", 1)
+-
+     cmd = [
+         str(SEESPACE_PYTHON),
+         "main.py",
+         "--model_name",
+         stage_model_name,
++        "--batch",
++        str(config.get("batch", 1)),
++        "--seq",
++        str(config.get("decode_tokens", 1)),
+         "--dp",
+-        str(dp),
++        str(config.get("dp", 1)),
+         "--tp",
+-        str(tp),
++        str(config.get("tp", 1)),
++        "--sp",
++        str(config.get("sp", 1)),
++        "--ep",
++        str(config.get("ep", 1)),
+         "--pp",
+-        str(pp),
++        str(config.get("pp", 1)),
++        "--vision_dp",
++        str(config.get("vision_dp", 1)),
++        "--vision_tp",
++        str(config.get("vision_tp", 1)),
++        "--vision_pp",
++        str(config.get("vision_pp", 1)),
++        "--vision_ep",
++        str(config.get("vision_ep", 1)),
++        "--text_dp",
++        str(config.get("text_dp", 1)),
++        "--text_tp",
++        str(config.get("text_tp", 1)),
++        "--text_pp",
++        str(config.get("text_pp", 1)),
++        "--text_ep",
++        str(config.get("text_ep", 1)),
+         "--output_dir",
+         str(output_dir),
+         "--output_name",
+@@ -145,6 +150,25 @@ def _run_stage(
+     model_type = model_params.get("model_type")
+     if model_type:
+         cmd.extend(["--model_type", str(model_type)])
++    cmd.extend(
++        [
++            "--vision_image_size",
++            str(_max_dimension(config.get("image_resolution"), 1)),
++            "--vision_patch_size",
++            str(_max_dimension(config.get("tile_size"), 1)),
++        ]
++    )
++    if config.get("weight_sharded"):
++        cmd.extend(["--weight_sharded", "true"])
++    if config.get("activation_recompute"):
++        cmd.extend(["--activation_recompute", "true"])
++    chakra_schema_version = config.get("chakra_schema_version")
++    if chakra_schema_version:
++        cmd.extend(["--chakra_schema_version", str(chakra_schema_version)])
++    if config.get("print_gpu_vram"):
++        cmd.extend(["--print_gpu_vram", "true"])
++    if config.get("include_backward"):
++        cmd.append("--include_backward")
+ 
+     result = subprocess.run(
+         cmd,
+@@ -277,24 +301,21 @@ def _run_astra(
+ def _map_metrics(config: Dict[str, Any], astra_result: Dict[str, int]) -> Dict[str, Any]:
+     wall_time_ns = int(astra_result["wall_time_ns"])
+     gpu_time_ns = int(astra_result["gpu_time_ns"])
++    comm_time_ns = int(astra_result["comm_time_ns"])
+     total_latency_s = wall_time_ns / 1e9
+     ideal_peak_pflops = float(config.get("big_star_peak_pflops", 10.0))
+     compute_utilization = (gpu_time_ns / wall_time_ns) if wall_time_ns else 0.0
+     effective_compute_pflops = ideal_peak_pflops * compute_utilization
++    bottleneck_stage = "communication" if gpu_time_ns and (comm_time_ns / gpu_time_ns) > 0.5 else "compute"
+ 
+     metrics = SimulationMetrics(
+-        total_samples=int(config.get("num_images", 1)),
++        total_samples=int(config.get("batch", 1)),
+         total_latency_s=total_latency_s,
+-        data_tx_latency_s=0.0,
+-        inter_stage_latency_s=0.0,
+-        stage1_compute_latency_s=0.0,
+-        stage2_compute_latency_s=0.0,
+         effective_compute_flops=effective_compute_pflops * 1e15,
+         effective_compute_pflops=effective_compute_pflops,
+         ideal_peak_pflops=ideal_peak_pflops,
+         compute_utilization=compute_utilization,
+-        bottleneck_stage="unknown",
+-        total_inference_time_s=total_latency_s,
++        bottleneck_stage=bottleneck_stage,
+     )
+     return asdict(metrics)
+ 
+@@ -341,7 +362,6 @@ def run_astra_simulation(
+         "mode": "single",
+         "config": normalized,
+         "metrics": metrics,
+-        "unsupported_fields": list(UNSUPPORTED_FIELDS),
+         "astra_sim_result": astra_result,
+         "artifacts": {
+             "stage_output_dir": str(output_dir),
+diff --git a/scsp/config.py b/scsp/config.py
+index bcc5547..b4a3cd8 100644
+--- a/scsp/config.py
++++ b/scsp/config.py
+@@ -41,8 +41,23 @@ class V1SimulationConfig:
+     image_type: Literal["RGB", "SAR"] = "RGB"
+ 
+     # Task and system settings.
+-    num_images: int = 1
++    batch: int = 1
+     decode_tokens: int = 1
++    sp: int = 1
++    ep: int = 1
++    vision_dp: int = 1
++    vision_tp: int = 1
++    vision_pp: int = 1
++    vision_ep: int = 1
++    text_dp: int = 1
++    text_tp: int = 1
++    text_pp: int = 1
++    text_ep: int = 1
++    weight_sharded: bool = False
++    activation_recompute: bool = False
++    chakra_schema_version: str = "v0.0.1"
++    print_gpu_vram: bool = False
++    include_backward: bool = False
+     channels: int = 3
+     bytes_per_pixel: int = 2
+     big_star_peak_pflops: float = 10.0
+@@ -55,12 +70,6 @@ class V1SimulationConfig:
+     prefill_memory_bytes_per_patch: float = 5.0e10
+     decode_flops_per_token: float = 1.435e11
+     decode_memory_bytes_per_token: float = 1.0e8
+-    llm_num_hidden_layers: int = 80
+-    llm_hidden_size: int = 8192
+-    llm_num_attention_heads: int = 64
+-    llm_num_key_value_heads: int = 8
+-    vision_patch_size: int = 14
+-    vision_spatial_merge_size: int = 2
+     inter_sat_latency_target_ms: float = 1.0
+     peak_power_limit_kw: float = 20.0
+     single_star_compute_payload_power_w: float = 20000.0
+@@ -91,7 +100,8 @@ def load_config(path: str | Path) -> V1SimulationConfig:
+             legacy = float(raw["inter_stage_transfer_mb"])
+             raw.setdefault("prefill_inter_stage_transfer_mb", legacy)
+             raw.setdefault("decode_inter_stage_transfer_kb", legacy * 1000.0)
+-    return V1SimulationConfig(**raw)
++    link_bandwidth_gbps = float(raw.get("link_bandwidth_gbps", 100.0))
++    return build_simulation_config(raw, link_bandwidth_gbps)
+ 
+ 
+ def _to_param_count(raw_value: Any, fallback: float) -> float:
+@@ -126,7 +136,7 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
+     normalized.setdefault("model_name", "Qwen2.5-VL-7B")
+     normalized.setdefault("model_params", "7B")
+     normalized.setdefault("flops_per_sample", 5e13)
+-    normalized.setdefault("num_images", 1)
++    normalized.setdefault("batch", 1)
+     normalized.setdefault("image_resolution", "512x512")
+     normalized.setdefault("decode_tokens", 1)
+     normalized.setdefault("big_star_peak_pflops", 10.0)
+@@ -153,17 +163,6 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
+         "resident_parameter_count",
+         _to_param_count(parameter_count.get("resident_unit", parameter_count.get("unit")), default_resident),
+     )
+-    llm = model_structure.get("llm", {}) if isinstance(model_structure, dict) else {}
+-    normalized.setdefault("llm_num_hidden_layers", int(llm.get("num_hidden_layers", 80) or 80))
+-    normalized.setdefault("llm_hidden_size", int(llm.get("hidden_size", 8192) or 8192))
+-    normalized.setdefault("llm_num_attention_heads", int(llm.get("num_attention_heads", 64) or 64))
+-    normalized.setdefault("llm_num_key_value_heads", int(llm.get("num_key_value_heads", 8) or 8))
+-    vision = model_structure.get("vision", {}) if isinstance(model_structure, dict) else {}
+-    normalized.setdefault("vision_patch_size", int(vision.get("patch_size", 14) or 14))
+-    normalized.setdefault(
+-        "vision_spatial_merge_size",
+-        int(vision.get("spatial_merge_size", 2) or 2),
+-    )
+     normalized.setdefault("inter_sat_latency_target_ms", 1.0)
+     normalized.setdefault("peak_power_limit_kw", 20.0)
+     normalized.setdefault(
+@@ -180,6 +179,21 @@ def normalize_raw_config(raw: Dict[str, Any]) -> Dict[str, Any]:
+     normalized.setdefault("dp", 1)
+     normalized.setdefault("tp", 1)
+     normalized.setdefault("pp", 1)
++    normalized.setdefault("sp", 1)
++    normalized.setdefault("ep", 1)
++    normalized.setdefault("vision_dp", 1)
++    normalized.setdefault("vision_tp", 1)
++    normalized.setdefault("vision_pp", 1)
++    normalized.setdefault("vision_ep", 1)
++    normalized.setdefault("text_dp", 1)
++    normalized.setdefault("text_tp", 1)
++    normalized.setdefault("text_pp", 1)
++    normalized.setdefault("text_ep", 1)
++    normalized.setdefault("weight_sharded", False)
++    normalized.setdefault("activation_recompute", False)
++    normalized.setdefault("chakra_schema_version", "v0.0.1")
++    normalized.setdefault("print_gpu_vram", False)
++    normalized.setdefault("include_backward", False)
+     normalized.setdefault("local_mem_bw_gbps", 3350.0)
+ 
+     if "prefill_inter_stage_transfer_mb" not in normalized or "decode_inter_stage_transfer_kb" not in normalized:
+@@ -230,18 +244,6 @@ def validate_raw_config(raw: Dict[str, Any]) -> None:
+         raise ValueError("active_parameter_count must be <= resident_parameter_count")
+     if float(raw.get("single_star_compute_payload_power_w", 0)) <= 0:
+         raise ValueError("single_star_compute_payload_power_w must be positive")
+-    if int(raw.get("llm_num_hidden_layers", 80)) <= 0:
+-        raise ValueError("llm_num_hidden_layers must be positive")
+-    if int(raw.get("llm_hidden_size", 8192)) <= 0:
+-        raise ValueError("llm_hidden_size must be positive")
+-    if int(raw.get("llm_num_attention_heads", 64)) <= 0:
+-        raise ValueError("llm_num_attention_heads must be positive")
+-    if int(raw.get("llm_num_key_value_heads", 8)) <= 0:
+-        raise ValueError("llm_num_key_value_heads must be positive")
+-    if int(raw.get("vision_patch_size", 14)) <= 0:
+-        raise ValueError("vision_patch_size must be positive")
+-    if int(raw.get("vision_spatial_merge_size", 2)) <= 0:
+-        raise ValueError("vision_spatial_merge_size must be positive")
+     if int(raw.get("decode_tokens", 1)) < 1:
+         raise ValueError("decode_tokens must be a positive integer")
+     if float(raw.get("prefill_inter_stage_transfer_mb", 0)) < 0:
+@@ -269,8 +271,23 @@ def build_simulation_config(raw: Dict[str, Any], link_bandwidth_gbps: float) ->
+         active_parameter_count=float(normalized["active_parameter_count"]),
+         resident_parameter_count=float(normalized["resident_parameter_count"]),
+         image_type=image_type,
+-        num_images=int(normalized["num_images"]),
++        batch=int(normalized["batch"]),
+         decode_tokens=int(normalized["decode_tokens"]),
++        sp=int(normalized["sp"]),
++        ep=int(normalized["ep"]),
++        vision_dp=int(normalized["vision_dp"]),
++        vision_tp=int(normalized["vision_tp"]),
++        vision_pp=int(normalized["vision_pp"]),
++        vision_ep=int(normalized["vision_ep"]),
++        text_dp=int(normalized["text_dp"]),
++        text_tp=int(normalized["text_tp"]),
++        text_pp=int(normalized["text_pp"]),
++        text_ep=int(normalized["text_ep"]),
++        weight_sharded=bool(normalized["weight_sharded"]),
++        activation_recompute=bool(normalized["activation_recompute"]),
++        chakra_schema_version=str(normalized["chakra_schema_version"]),
++        print_gpu_vram=bool(normalized["print_gpu_vram"]),
++        include_backward=bool(normalized["include_backward"]),
+         channels=int(image_defaults["channels"]),
+         bytes_per_pixel=int(image_defaults["bytes_per_pixel"]),
+         big_star_peak_pflops=float(normalized["big_star_peak_pflops"]),
+@@ -283,12 +300,6 @@ def build_simulation_config(raw: Dict[str, Any], link_bandwidth_gbps: float) ->
+         prefill_memory_bytes_per_patch=float(normalized["prefill_memory_bytes_per_patch"]),
+         decode_flops_per_token=float(normalized["decode_flops_per_token"]),
+         decode_memory_bytes_per_token=float(normalized["decode_memory_bytes_per_token"]),
+-        llm_num_hidden_layers=int(normalized["llm_num_hidden_layers"]),
+-        llm_hidden_size=int(normalized["llm_hidden_size"]),
+-        llm_num_attention_heads=int(normalized["llm_num_attention_heads"]),
+-        llm_num_key_value_heads=int(normalized["llm_num_key_value_heads"]),
+-        vision_patch_size=int(normalized["vision_patch_size"]),
+-        vision_spatial_merge_size=int(normalized["vision_spatial_merge_size"]),
+         inter_sat_latency_target_ms=float(normalized["inter_sat_latency_target_ms"]),
+         peak_power_limit_kw=float(normalized["peak_power_limit_kw"]),
+         single_star_compute_payload_power_w=float(normalized["single_star_compute_payload_power_w"]),
+@@ -314,8 +325,23 @@ def dump_config_dict(config: V1SimulationConfig) -> Dict[str, Any]:
+         "decode_inter_stage_transfer_kb": config.decode_inter_stage_transfer_kb,
+         "flops_per_sample": config.flops_per_sample,
+         "peak_vram_gb": config.peak_vram_gb,
+-        "num_images": config.num_images,
++        "batch": config.batch,
+         "decode_tokens": config.decode_tokens,
++        "sp": config.sp,
++        "ep": config.ep,
++        "vision_dp": config.vision_dp,
++        "vision_tp": config.vision_tp,
++        "vision_pp": config.vision_pp,
++        "vision_ep": config.vision_ep,
++        "text_dp": config.text_dp,
++        "text_tp": config.text_tp,
++        "text_pp": config.text_pp,
++        "text_ep": config.text_ep,
++        "weight_sharded": config.weight_sharded,
++        "activation_recompute": config.activation_recompute,
++        "chakra_schema_version": config.chakra_schema_version,
++        "print_gpu_vram": config.print_gpu_vram,
++        "include_backward": config.include_backward,
+         "channels": config.channels,
+         "bytes_per_pixel": config.bytes_per_pixel,
+         "big_star_peak_pflops": config.big_star_peak_pflops,
+@@ -328,12 +354,6 @@ def dump_config_dict(config: V1SimulationConfig) -> Dict[str, Any]:
+         "prefill_memory_bytes_per_patch": config.prefill_memory_bytes_per_patch,
+         "decode_flops_per_token": config.decode_flops_per_token,
+         "decode_memory_bytes_per_token": config.decode_memory_bytes_per_token,
+-        "llm_num_hidden_layers": config.llm_num_hidden_layers,
+-        "llm_hidden_size": config.llm_hidden_size,
+-        "llm_num_attention_heads": config.llm_num_attention_heads,
+-        "llm_num_key_value_heads": config.llm_num_key_value_heads,
+-        "vision_patch_size": config.vision_patch_size,
+-        "vision_spatial_merge_size": config.vision_spatial_merge_size,
+         "inter_sat_latency_target_ms": config.inter_sat_latency_target_ms,
+         "peak_power_limit_kw": config.peak_power_limit_kw,
+         "single_star_compute_payload_power_w": config.single_star_compute_payload_power_w,
+diff --git a/scsp/models.py b/scsp/models.py
+index aa8549a..5eaa05e 100644
+--- a/scsp/models.py
++++ b/scsp/models.py
+@@ -7,32 +7,8 @@ from dataclasses import dataclass
+ class SimulationMetrics:
+     total_samples: int
+     total_latency_s: float
+-    data_tx_latency_s: float
+-    inter_stage_latency_s: float
+-    stage1_compute_latency_s: float
+-    stage2_compute_latency_s: float
+     effective_compute_flops: float
+     effective_compute_pflops: float
+     ideal_peak_pflops: float
+     compute_utilization: float
+     bottleneck_stage: str
+-    decode_latency_s_per_token: float = 0.0
+-    decode_total_latency_s: float = 0.0
+-    decode_compute_latency_s_per_token: float = 0.0
+-    decode_memory_latency_s_per_token: float = 0.0
+-    decode_effective_compute_pflops: float = 0.0
+-    decode_bottleneck: str = "unknown"
+-    prefill_compute_time_s: float = 0.0
+-    prefill_memory_time_s: float = 0.0
+-    prefill_time_s: float = 0.0
+-    prefill_bottleneck: str = "unknown"
+-    decode_energy_efficiency_tokens_per_j: float = 0.0
+-    total_inference_time_s: float = 0.0
+-    prefill_peak_memory_bytes: float = 0.0
+-    prefill_peak_memory_gb: float = 0.0
+-    single_star_peak_memory_bytes: float = 0.0
+-    single_star_peak_memory_gb: float = 0.0
+-    prefill_weight_memory_bytes: float = 0.0
+-    prefill_kv_memory_bytes: float = 0.0
+-    prefill_activation_peak_memory_bytes: float = 0.0
+-    prefill_workspace_memory_bytes: float = 0.0
+diff --git a/web/index.html b/web/index.html
+index cd135f2..0bc4d5d 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -940,20 +940,20 @@
+               <h3>关键指标</h3>
+               <div class="kpi-split">
+                 <div class="kpi-col">
+-                  <div class="kpi-item"><div class="kpi-k">Prefill时延（ms）</div><div class="kpi-v" id="kpiPrefillLatency">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill计算项时延（s/patch）</div><div class="kpi-v" id="kpiPrefillComputeTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill访存项时延（s/patch）</div><div class="kpi-v" id="kpiPrefillMemoryTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill主导瓶颈</div><div class="kpi-v" id="kpiPrefillBottleneck">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Prefill有效算力（PFLOPS）</div><div class="kpi-v" id="kpiPrefillPflops">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">单星峰值显存占用（GB）</div><div class="kpi-v" id="kpiPrefillPeakMem">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">总时延（s）</div><div class="kpi-v" id="kpiPrefillLatency">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">总时延（ms）</div><div class="kpi-v" id="kpiPrefillComputeTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">有效算力（PFLOPS）</div><div class="kpi-v" id="kpiPrefillMemoryTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">主导瓶颈</div><div class="kpi-v" id="kpiPrefillBottleneck">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">计算利用率（%）</div><div class="kpi-v" id="kpiPrefillPflops">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">样本数</div><div class="kpi-v" id="kpiPrefillPeakMem">-</div></div>
+                 </div>
+                 <div class="kpi-col">
+-                  <div class="kpi-item"><div class="kpi-k">Decode时延（ms）</div><div class="kpi-v" id="kpiDecodeLatency">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode计算项时延（ms/token）</div><div class="kpi-v" id="kpiDecodeComputeTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode访存项时延（ms/token）</div><div class="kpi-v" id="kpiDecodeMemoryTime">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode主导瓶颈</div><div class="kpi-v" id="kpiDecodeBottleneck">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode有效算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodePflops">-</div></div>
+-                  <div class="kpi-item"><div class="kpi-k">Decode能效（tokens/J）</div><div class="kpi-v" id="kpiDecodeEnergyEfficiency">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">带宽点（Gbps）</div><div class="kpi-v" id="kpiDecodeLatency">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">峰值算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodeComputeTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">有效算力（FLOPS）</div><div class="kpi-v" id="kpiDecodeMemoryTime">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">瓶颈类别</div><div class="kpi-v" id="kpiDecodeBottleneck">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">有效算力（PFLOPS）</div><div class="kpi-v" id="kpiDecodePflops">-</div></div>
++                  <div class="kpi-item"><div class="kpi-k">计算利用率</div><div class="kpi-v" id="kpiDecodeEnergyEfficiency">-</div></div>
+                 </div>
+               </div>
+             </div>
+@@ -1293,6 +1293,7 @@
+ 
+     <script>
+       let MODEL_REGISTRY = {};
++      const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+ 
+       const MODEL_REGISTRY_BASELINE = JSON.parse(`{"Qwen2.5-VL-3B":{"model_params":"3B","structure":{"model_name":"Qwen2.5-VL-3B","model_type":"vlm","parameter_count":{"active_unit":3000000000,"resident_unit":3000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":36,"hidden_size":2560,"intermediate_size":9728,"num_attention_heads":20,"num_key_value_heads":4},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":2560}},"profiling":{"prefill_flops_gflops_per_patch":3623.7,"decode_flops_gflops_per_token":5.603,"prefill_memory_gb_per_patch":8.44,"prefill_peak_memory_breakdown_gb":{"weight_gb":5.2,"kv_cache_gb":1.2,"activation_peak_gb":1.74,"workspace_gb":0.3},"decode_memory_mb_per_token":6808,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":6.45,"kv_cache_read_gb_per_token":0.2,"kv_cache_write_gb_per_token":0.0001,"activation_and_intermediate_gb_per_token":0.1579},"inter_stage_transfer":{"prefill_mb":1.79,"decode_kb":5.72}}},"Qwen2.5-VL-7B":{"model_params":"7B","structure":{"model_name":"Qwen2.5-VL-7B","model_type":"vlm","parameter_count":{"active_unit":7000000000,"resident_unit":7000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":28,"hidden_size":3584,"intermediate_size":18944,"num_attention_heads":28,"num_key_value_heads":4},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":3584}},"profiling":{"prefill_flops_gflops_per_patch":6275,"decode_flops_gflops_per_token":13.124,"prefill_memory_gb_per_patch":16.57,"prefill_peak_memory_breakdown_gb":{"weight_gb":11,"kv_cache_gb":2.2,"activation_peak_gb":2.77,"workspace_gb":0.6},"decode_memory_mb_per_token":15252,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":14.85,"kv_cache_read_gb_per_token":0.15,"kv_cache_write_gb_per_token":0.0001,"activation_and_intermediate_gb_per_token":0.2519},"inter_stage_transfer":{"prefill_mb":2.5,"decode_kb":7.17}}},"Qwen2.5-VL-32B":{"model_params":"32B","structure":{"model_name":"Qwen2.5-VL-32B","model_type":"vlm","parameter_count":{"active_unit":32000000000,"resident_unit":32000000000,"dense_or_moe":"dense"},"llm":{"num_hidden_layers":64,"hidden_size":5120,"intermediate_size":27648,"num_attention_heads":40,"num_key_value_heads":8},"vision":{"depth":32,"hidden_size":1280,"patch_size":14,"spatial_merge_size":2,"out_hidden_size":5120}},"profiling":{"prefill_flops_gflops_per_patch":23729.2,"decode_flops_gflops_per_token":62.6511,"prefill_memory_gb_per_patch":67.77,"prefill_peak_memory_breakdown_gb":{"weight_gb":64.98,"kv_cache_gb":0.09,"activation_peak_gb":1.61,"workspace_gb":1.08},"decode_memory_mb_per_token":67199,"decode_memory_breakdown_gb":{"weight_read_gb_per_token":65.528,"kv_cache_read_gb_per_token":0.0954,"kv_cache_write_gb_per_token":0.000262,"activation_and_intermediate_gb_per_token":4.1e-05},"inter_stage_transfer":{"prefill_mb":3.57,"decode_kb":10.24}}}}`);
+ 
+@@ -1321,7 +1322,7 @@
+           decode_flops_per_token: 1.435e11,
+           decode_memory_bytes_per_token: 1.0e8,
+           peak_vram_gb: 120,
+-          num_images: 1,
++          batch: 1,
+           big_star_peak_pflops_single: 10.0,
+           big_star_peak_pflops_sweep: [6, 8, 10, 12, 14],
+           big_star_peak_pflops: 10.0,
+@@ -1375,11 +1376,11 @@
+       };
+ 
+       const mockRows = [
+-        { link_bandwidth_gbps: 10, total_latency_s: 167.21, effective_compute_pflops: 5.1, data_tx_latency_s: 29.53, inter_stage_latency_s: 18.8, stage1_compute_latency_s: 62.14, stage2_compute_latency_s: 57.54, compute_utilization: 0.51 },
+-        { link_bandwidth_gbps: 50, total_latency_s: 132.45, effective_compute_pflops: 6.8, data_tx_latency_s: 19.53, inter_stage_latency_s: 14.2, stage1_compute_latency_s: 56.14, stage2_compute_latency_s: 42.58, compute_utilization: 0.68 },
+-        { link_bandwidth_gbps: 100, total_latency_s: 124.53, effective_compute_pflops: 8.1, data_tx_latency_s: 14.53, inter_stage_latency_s: 9.17, stage1_compute_latency_s: 62.14, stage2_compute_latency_s: 27.86, compute_utilization: 0.812 },
+-        { link_bandwidth_gbps: 200, total_latency_s: 118.92, effective_compute_pflops: 8.45, data_tx_latency_s: 11.12, inter_stage_latency_s: 7.8, stage1_compute_latency_s: 61.21, stage2_compute_latency_s: 26.79, compute_utilization: 0.845 },
+-        { link_bandwidth_gbps: 400, total_latency_s: 116.77, effective_compute_pflops: 8.6, data_tx_latency_s: 9.64, inter_stage_latency_s: 6.6, stage1_compute_latency_s: 60.44, stage2_compute_latency_s: 25.23, compute_utilization: 0.86 }
++        { total_samples: 1, link_bandwidth_gbps: 10, total_latency_s: 167.21, effective_compute_flops: 5.1e15, effective_compute_pflops: 5.1, ideal_peak_pflops: 10.0, compute_utilization: 0.51, bottleneck_stage: "communication" },
++        { total_samples: 1, link_bandwidth_gbps: 50, total_latency_s: 132.45, effective_compute_flops: 6.8e15, effective_compute_pflops: 6.8, ideal_peak_pflops: 10.0, compute_utilization: 0.68, bottleneck_stage: "communication" },
++        { total_samples: 1, link_bandwidth_gbps: 100, total_latency_s: 124.53, effective_compute_flops: 8.1e15, effective_compute_pflops: 8.1, ideal_peak_pflops: 10.0, compute_utilization: 0.812, bottleneck_stage: "compute" },
++        { total_samples: 1, link_bandwidth_gbps: 200, total_latency_s: 118.92, effective_compute_flops: 8.45e15, effective_compute_pflops: 8.45, ideal_peak_pflops: 10.0, compute_utilization: 0.845, bottleneck_stage: "compute" },
++        { total_samples: 1, link_bandwidth_gbps: 400, total_latency_s: 116.77, effective_compute_flops: 8.6e15, effective_compute_pflops: 8.6, ideal_peak_pflops: 10.0, compute_utilization: 0.86, bottleneck_stage: "compute" }
+       ];
+ 
+       /** 实验设计页「其他参数」与主表单 cfg* 镜像（不含模型结构/参数量、不含任何扫描列表；标称模型/算力/带宽由核心区同步） */
+@@ -1429,6 +1430,23 @@
+ 
+       const byId = (id) => document.getElementById(id);
+       const toPrettyJson = (obj) => JSON.stringify(obj || {}, null, 2);
++      function toast(message, options = {}) {
++        const box = document.createElement("div");
++        box.textContent = message;
++        box.style.position = "fixed";
++        box.style.right = "18px";
++        box.style.bottom = "18px";
++        box.style.zIndex = "9999";
++        box.style.maxWidth = "360px";
++        box.style.padding = "10px 12px";
++        box.style.borderRadius = "8px";
++        box.style.border = "1px solid rgba(255,255,255,0.18)";
++        box.style.background = options.type === "error" ? "rgba(126, 31, 31, 0.94)" : "rgba(13, 27, 55, 0.94)";
++        box.style.color = "#f7fbff";
++        box.style.boxShadow = "0 10px 24px rgba(0,0,0,0.28)";
++        document.body.appendChild(box);
++        window.setTimeout(() => box.remove(), 3200);
++      }
+       const toBText = (count) => {
+         const n = Number(count || 0);
+         if (!Number.isFinite(n) || n <= 0) return "";
+@@ -1588,35 +1606,16 @@
+       function metricsResponseToKpiRow(apiResult, linkBw, pflops) {
+         const m = apiResult && apiResult.metrics;
+         if (!m || !Number.isFinite(Number(m.total_latency_s))) return null;
+-        const unsupported = new Set(Array.isArray(apiResult.unsupported_fields) ? apiResult.unsupported_fields : []);
+-        const metricValue = (key) => unsupported.has(key) ? null : Number(m[key]);
+-        const metricText = (key) => unsupported.has(key) ? "—" : String(m[key] || "");
+         return {
+           total_samples: Number(m.total_samples),
+           link_bandwidth_gbps: linkBw,
+           single_star_pflops: pflops,
+           total_latency_s: Number(m.total_latency_s),
++          effective_compute_flops: Number(m.effective_compute_flops),
+           effective_compute_pflops: Number(m.effective_compute_pflops),
+-          data_tx_latency_s: metricValue("data_tx_latency_s"),
+-          inter_stage_latency_s: metricValue("inter_stage_latency_s"),
+-          stage1_compute_latency_s: metricValue("stage1_compute_latency_s"),
+-          stage2_compute_latency_s: metricValue("stage2_compute_latency_s"),
++          ideal_peak_pflops: Number(m.ideal_peak_pflops),
+           compute_utilization: Number(m.compute_utilization),
+-          prefill_compute_time_s: metricValue("prefill_compute_time_s"),
+-          prefill_memory_time_s: metricValue("prefill_memory_time_s"),
+-          prefill_time_s: metricValue("prefill_time_s"),
+-          prefill_bottleneck: metricText("prefill_bottleneck"),
+-          prefill_peak_memory_gb: metricValue("prefill_peak_memory_gb"),
+-          single_star_peak_memory_gb: unsupported.has("single_star_peak_memory_gb") ? null : Number(m.single_star_peak_memory_gb ?? m.prefill_peak_memory_gb),
+-          decode_latency_s_per_token: metricValue("decode_latency_s_per_token"),
+-          decode_total_latency_s: metricValue("decode_total_latency_s"),
+-          decode_compute_latency_s_per_token: metricValue("decode_compute_latency_s_per_token"),
+-          decode_memory_latency_s_per_token: metricValue("decode_memory_latency_s_per_token"),
+-          decode_effective_compute_pflops: metricValue("decode_effective_compute_pflops"),
+-          decode_bottleneck: metricText("decode_bottleneck"),
+-          decode_energy_efficiency_tokens_per_j: metricValue("decode_energy_efficiency_tokens_per_j"),
+-          total_inference_time_s: metricValue("total_inference_time_s"),
+-          unsupported_fields: unsupported
++          bottleneck_stage: String(m.bottleneck_stage || "")
+         };
+       }
+ 
+@@ -1996,7 +1995,8 @@
+       function getRows() {
+         if (!state.overviewResultsDisplayed) return [];
+         if (state.bandwidthSensitivityRows.length) return state.bandwidthSensitivityRows;
+-        return state.sweepRows.length ? state.sweepRows : mockRows;
++        if (state.sweepRows.length) return state.sweepRows;
++        return isDev ? mockRows : [];
+       }
+       function getBandwidthSensitivityRows() {
+         if (!state.overviewResultsDisplayed) return [];
+@@ -2061,34 +2061,18 @@
+             el.classList.remove("unsupported-metric");
+           }
+         };
+-        const prefillTotal = r.prefill_time_s;
+-        const prefillCompute = r.prefill_compute_time_s;
+-        const prefillMemory = r.prefill_memory_time_s;
+-        const prefillBottleneck = String(r.prefill_bottleneck || "-");
+-        const decodeTokensKpi = Math.max(1, Math.round(Number(state.config.decode_tokens) || 1));
+-        let decodeTotalS = r.decode_total_latency_s;
+-        if (decodeTotalS !== null && !Number.isFinite(Number(decodeTotalS))) {
+-          decodeTotalS =
+-            Number(r.decode_latency_s_per_token || 0) * decodeTokensKpi;
+-        }
+-        const decodeCompute = r.decode_compute_latency_s_per_token;
+-        const decodeMemory = r.decode_memory_latency_s_per_token;
+-        const decodeBottleneck = String(r.decode_bottleneck || "-");
+-        const decodeEffectivePflops = Number(r.decode_effective_compute_pflops);
+-        const decodeEnergyEfficiency = Number(r.decode_energy_efficiency_tokens_per_j);
+-        const prefillPeakMemGb = r.single_star_peak_memory_gb ?? r.prefill_peak_memory_gb ?? null;
+-        setMetric("kpiPrefillLatency", prefillTotal, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setMetric("kpiPrefillComputeTime", prefillCompute, (v) => `${v.toFixed(4)}`);
+-        setMetric("kpiPrefillMemoryTime", prefillMemory, (v) => `${v.toFixed(4)}`);
+-        setTextMetric("kpiPrefillBottleneck", prefillBottleneck);
+-        setMetric("kpiPrefillPflops", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
+-        setMetric("kpiPrefillPeakMem", prefillPeakMemGb, (v) => `${v.toFixed(2)}`);
+-        setMetric("kpiDecodeLatency", decodeTotalS, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setMetric("kpiDecodeComputeTime", decodeCompute, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setMetric("kpiDecodeMemoryTime", decodeMemory, (v) => `${(v * 1e3).toFixed(2)}`);
+-        setTextMetric("kpiDecodeBottleneck", decodeBottleneck);
+-        setMetric("kpiDecodePflops", decodeEffectivePflops, (v) => `${v.toFixed(3)}`);
+-        setMetric("kpiDecodeEnergyEfficiency", decodeEnergyEfficiency, (v) => `${v.toFixed(3)}`);
++        setMetric("kpiPrefillLatency", r.total_latency_s, (v) => `${v.toFixed(3)}`);
++        setMetric("kpiPrefillComputeTime", r.total_latency_s, (v) => `${(v * 1e3).toFixed(1)}`);
++        setMetric("kpiPrefillMemoryTime", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
++        setTextMetric("kpiPrefillBottleneck", r.bottleneck_stage || "—");
++        setMetric("kpiPrefillPflops", r.compute_utilization, (v) => `${(v * 100).toFixed(1)}`);
++        setMetric("kpiPrefillPeakMem", r.total_samples, (v) => `${Math.round(v)}`);
++        setMetric("kpiDecodeLatency", r.link_bandwidth_gbps, (v) => `${v.toFixed(0)}`);
++        setMetric("kpiDecodeComputeTime", r.single_star_pflops, (v) => `${v.toFixed(2)}`);
++        setMetric("kpiDecodeMemoryTime", r.effective_compute_flops, (v) => `${v.toExponential(2)}`);
++        setTextMetric("kpiDecodeBottleneck", r.bottleneck_stage || "—");
++        setMetric("kpiDecodePflops", r.effective_compute_pflops, (v) => `${v.toFixed(2)}`);
++        setMetric("kpiDecodeEnergyEfficiency", r.compute_utilization, (v) => `${v.toFixed(3)}`);
+       }
+ 
+       function renderDonut() {
+@@ -2103,39 +2087,19 @@
+           byId("delayLegend").innerHTML = "";
+           return;
+         }
+-        const cfg = state.config || {};
+-        const bw = Math.max(1, Number(cfg.link_bandwidth_gbps_single || 400));
+-        const distanceKm = Math.max(0, Number(cfg.inter_sat_distance_km || 10));
+-        const flops = Math.max(0, Number(cfg.flops_per_sample || 0));
+-        const peakPflops = Math.max(1e-9, Number(cfg.big_star_peak_pflops_single || cfg.big_star_peak_pflops || 10.0));
+-        const memoryBwBytesPerSec = Math.max(1e-9, Number(cfg.single_node_memory_bandwidth_bytes_per_sec || 2.0e13));
+-        const prefillMemoryBytes = Math.max(0, Number(cfg.prefill_memory_bytes_per_patch || 5.0e10));
+-        const imageType = String(cfg.image_type || "RGB").toUpperCase();
+-        const channels = imageType === "SAR" ? 1 : 3;
+-        const bytesPerPixel = imageType === "SAR" ? 4 : 2;
+-        const tileText = String(cfg.tile_size || "512x512").toLowerCase();
+-        const [tileW, tileH] = tileText.split("x").map((n) => Number(n.trim()));
+-        if (!Number.isFinite(tileW) || !Number.isFinite(tileH) || tileW <= 0 || tileH <= 0) {
++        const r = getOverviewKpiRow();
++        const totalLatency = Number(r?.total_latency_s);
++        const computeUtil = Number(r?.compute_utilization);
++        if (!Number.isFinite(totalLatency) || totalLatency <= 0 || !Number.isFinite(computeUtil)) {
+           byId("donut").innerHTML = "";
+           byId("delayLegend").innerHTML = "";
+           return;
+         }
+-        const tileMb = (tileW * tileH * channels * bytesPerPixel) / 1_000_000;
+-        const transfer = (dataMb) => {
+-          const serialization = (dataMb * 8.0) / (bw * 1000.0);
+-          const propagation = (distanceKm * 1000.0) / 299792458.0;
+-          return serialization + propagation;
+-        };
+-        const txRemoteToCompute = transfer(tileMb);
+-        const txComputeToCompute = transfer(Number(cfg.prefill_inter_stage_transfer_mb || 0));
+-        const effectiveStarFlops = peakPflops * 1e15;
+-        const computeLatency = (flops / effectiveStarFlops);
+-        const memoryLatency = prefillMemoryBytes / memoryBwBytesPerSec;
+-        const prefillLatency = Math.max(computeLatency, memoryLatency);
++        const computeTime = totalLatency * Math.max(0, Math.min(1, computeUtil));
++        const otherTime = Math.max(0, totalLatency - computeTime);
+         const seg = [
+-          { k: "遥感星-计算星传输", v: txRemoteToCompute, c: "#57a6ff" },
+-          { k: "计算星-计算星传输", v: txComputeToCompute, c: "#7f76ff" },
+-          { k: "计算星 Prefill 时延", v: prefillLatency, c: "#3fd389" }
++          { k: "ASTRA GPU时间", v: computeTime, c: "#3fd389" },
++          { k: "ASTRA通信/等待时间", v: otherTime, c: "#57a6ff" }
+         ];
+         const total = seg.reduce((s, i) => s + i.v, 0.00001);
+         const radius = 68;
+@@ -2865,25 +2829,6 @@
+       const EXP_RESULT_CURVE_CANVAS_IDS = ["expResultChart0", "expResultChart1"];
+       const EXP_RESULT_HEATMAP_CANVAS_IDS = ["expHeatmapPrefill", "expHeatmapDecodeTps"];
+ 
+-      function extractFourQuantitiesFromMetrics(m, decodeTokens) {
+-        const tok = Math.max(1, Number(decodeTokens) || 1);
+-        const prefillS = Number(m?.prefill_time_s);
+-        const dlat = Number(m?.decode_latency_s_per_token);
+-        let decodeTotS = Number(m?.decode_total_latency_s);
+-        if (!Number.isFinite(decodeTotS) && Number.isFinite(dlat)) decodeTotS = dlat * tok;
+-        const energy = Number(m?.decode_energy_efficiency_tokens_per_j);
+-        const prefillMs = Number.isFinite(prefillS) ? prefillS * 1000 : NaN;
+-        const decodeTps = Number.isFinite(dlat) && dlat > 0 ? 1 / dlat : NaN;
+-        const taskPdMs =
+-          Number.isFinite(prefillS) && Number.isFinite(decodeTotS) ? (prefillS + decodeTotS) * 1000 : NaN;
+-        return {
+-          prefillMs: Number.isFinite(prefillMs) ? prefillMs : 0,
+-          decodeTps: Number.isFinite(decodeTps) ? decodeTps : 0,
+-          energy: Number.isFinite(energy) ? energy : 0,
+-          taskPdMs: Number.isFinite(taskPdMs) ? taskPdMs : 0
+-        };
+-      }
+-
+       function estimateFourFromTotalLatencyS(totalS, decodeTokens) {
+         const t = Number(totalS);
+         const tok = Math.max(1, Number(decodeTokens) || 1);
+@@ -2909,11 +2854,7 @@
+         ) {
+           return row;
+         }
+-        const hasEngine =
+-          Number.isFinite(Number(row.prefill_time_s)) && Number.isFinite(Number(row.decode_latency_s_per_token));
+-        const q = hasEngine
+-          ? extractFourQuantitiesFromMetrics(row, decodeTokens)
+-          : estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
++        const q = estimateFourFromTotalLatencyS(Number(row.total_latency_s), decodeTokens);
+         return {
+           ...row,
+           prefill_latency_ms: q.prefillMs,
+@@ -2958,8 +2899,13 @@
+               const ret = await apiPost("/api/simulations/sweep", { config: cfg, bandwidths_gbps: bws });
+               rows = Array.isArray(ret.rows) && ret.rows.length ? ret.rows : [];
+             } catch {
+-              rows = mockRows.filter((r) => bws.includes(r.link_bandwidth_gbps));
+-              if (!rows.length) rows = mockRows.slice();
++              toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
++              if (isDev) {
++                rows = mockRows.filter((r) => bws.includes(r.link_bandwidth_gbps));
++                if (!rows.length) rows = mockRows.slice();
++              } else {
++                rows = [];
++              }
+             }
+           } else if (tid === "compute_sweep") {
+             xKey = "single_star_pflops";
+@@ -2981,13 +2927,15 @@
+               }
+             }
+             if (!rows.length) {
+-              const baseP = Number(state.config.big_star_peak_pflops_single) || 10;
+-              plist.forEach((p) => {
+-                rows.push({
+-                  single_star_pflops: p,
+-                  total_latency_s: (mockRows[2].total_latency_s * baseP) / Math.max(p, 0.1)
++              if (isDev) {
++                const baseP = Number(state.config.big_star_peak_pflops_single) || 10;
++                plist.forEach((p) => {
++                  rows.push({
++                    single_star_pflops: p,
++                    total_latency_s: (mockRows[2].total_latency_s * baseP) / Math.max(p, 0.1)
++                  });
+                 });
+-              });
++              }
+             }
+           } else if (tid === "inter_sat_distance") {
+             xKey = "inter_sat_distance_km";
+@@ -3005,11 +2953,12 @@
+                 const ret = await apiPost("/api/simulations/single", { config: pointCfg, bandwidth_gbps: bw });
+                 m = ret?.metrics;
+               } catch {
++                toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+                 m = null;
+               }
+               if (m && Number.isFinite(Number(m.total_latency_s))) {
+                 rows.push({ inter_sat_distance_km: dist, ...m });
+-              } else {
++              } else if (isDev) {
+                 rows.push({ inter_sat_distance_km: dist, total_latency_s: 88 + dist * 0.42 });
+               }
+             }
+@@ -3034,12 +2983,15 @@
+                 const c = buildConfigForSimulation({});
+                 const ret = await apiPost("/api/simulations/single", { config: c, bandwidth_gbps: bw });
+                 const m = ret?.metrics;
+-                const v = Number(m?.single_star_peak_memory_gb ?? m?.prefill_peak_memory_gb);
++                const v = Number(m?.single_star_peak_memory_gb);
+                 if (Number.isFinite(v)) memGb = v;
+               } catch {
++                toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+                 memGb = NaN;
+               }
+-              if (!Number.isFinite(memGb)) memGb = 6 + mi * 5;
++              if (!Number.isFinite(memGb)) {
++                if (isDev) memGb = 6 + mi * 5;
++              }
+               rows.push({
+                 model: colLabels[mi],
+                 model_name: name,
+@@ -3598,15 +3550,19 @@
+           };
+           showResult(ret);
+         } catch {
++          toast("后端仿真接口调用失败，请检查服务状态", { type: "error" });
+           state.overviewResultsDisplayed = true;
+           readConfigFromInputs();
+-          const sbw = state.config.link_bandwidth_gbps_single;
+-          const sp = state.config.big_star_peak_pflops_single;
+-          state.kpiOverviewRow = mockRows.find((r) => r.link_bandwidth_gbps === sbw) || mockRows[Math.min(2, mockRows.length - 1)];
+-          state.sweepRows = mockRows;
+-          state.bandwidthSensitivityRows = mockRows;
+-          state.computeSensitivityRows = [];
+-          showResult({ warning: "后端接口不可用，已回退 mock 数据。" });
++          if (isDev) {
++            const sbw = state.config.link_bandwidth_gbps_single;
++            state.kpiOverviewRow = mockRows.find((r) => r.link_bandwidth_gbps === sbw) || mockRows[Math.min(2, mockRows.length - 1)];
++            state.sweepRows = mockRows;
++            state.bandwidthSensitivityRows = mockRows;
++            state.computeSensitivityRows = [];
++            showResult({ warning: "后端接口不可用，已回退 mock 数据。" });
++          } else {
++            showResult({ error: "后端接口不可用" });
++          }
+           renderAll();
+         }
+       };
+@@ -3634,7 +3590,11 @@
+           const health = await apiGet("/api/health");
+           byId("healthText").textContent = `API 状态：${health.status || "ok"}`;
+         } catch {
+-          byId("healthText").textContent = "API 状态：不可用（已启用 mock 展示）";
++          if (isDev) {
++            byId("healthText").textContent = "API 状态：不可用（已启用 mock 展示）";
++          } else {
++            byId("healthText").textContent = "API 状态：不可用";
++          }
+         }
+         state.overviewResultsDisplayed = false;
+         state.sweepRows = [];
